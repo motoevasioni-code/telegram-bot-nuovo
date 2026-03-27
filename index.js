@@ -1,0 +1,1 @@
+const TelegramBot=require('node-telegram-bot-api'); const bot=new TelegramBot(process.env.BOT_TOKEN,{polling:true}); bot.onText(/\/start/,msg=>bot.sendMessage(msg.chat.id,'Ciao! Il bot Telegram Motoevasioni è online.')); console.log('Bot avviato.');
