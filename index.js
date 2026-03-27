@@ -2,6 +2,26 @@ const TelegramBot = require('node-telegram-bot-api');
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
+bot.onText(/\/foto/, (msg) => {
+  bot.sendPhoto(
+    msg.chat.id,
+    'gridpass-promo.png',
+    {
+      caption: 'Scopri GridPass Pass Stagionale 2025 e tutti i vantaggi dedicati ai biker.',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Abbonamento stagionale',
+              url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+});
+
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
