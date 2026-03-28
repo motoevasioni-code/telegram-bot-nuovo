@@ -6,55 +6,120 @@ const userState = {};
 
 const ADMIN_CHAT_ID = 1402209413;
 
-bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const startParam = match && match[1] ? match[1].trim() : '';
+/*
+  STATO FOTO ONLINE
+  - activeKey: null | 'online_one' | 'online_two'
+  - expiresAt: timestamp in millisecondi oppure null
+  - In questa versione lo stato è in memoria.
+  - Se il bot viene riavviato, questo stato si azzera.
+*/
+const onlineState = {
+  activeKey: null,
+  expiresAt: null
+};
 
-  if (startParam === 'segnalazione_passi') {
-    userState[chatId] = { step: 'tipo' };
+const ONLINE_CONTENT = {
+  online_one: {
+    file: 'online_one.png',
+    caption: '🏍️ Trova la foto, rivivi l’emozione e condividila.',
+    buttonText: 'Trova la foto',
+    buttonUrl: 'https://www.motoevasioni.it/foto-moto-passi/'
+  },
+  online_two: {
+    file: 'online_two.png',
+    caption: '🏍️ Trova la foto, rivivi l’emozione e condividila.',
+    buttonText: 'Trova la foto',
+    buttonUrl: 'https://www.motoevasioni.it/foto-moto-passi/'
+  }
+};
 
-    bot.sendMessage(
-      chatId,
-      'Segnalazione live attivata.\n\nScrivi il tipo di segnalazione:\n- meteo\n- traffico\n- strada\n- chiusura'
-    );
+function isAdmin(chatId) {
+  return Number(chatId) === Number(ADMIN_CHAT_ID);
+}
+
+function getDefaultExpiryMs() {
+  /*
+    Default: 5 giorni
+    Puoi cambiarlo quando vuoi.
+  */
+  return 5 * 24 * 60 * 60 * 1000;
+}
+
+function cleanupExpiredOnlineState() {
+  if (!onlineState.activeKey) {
     return;
   }
 
+  if (!onlineState.expiresAt) {
+    return;
+  }
+
+  if (Date.now() >= onlineState.expiresAt) {
+    onlineState.activeKey = null;
+    onlineState.expiresAt = null;
+  }
+}
+
+function getActiveOnlineContent() {
+  cleanupExpiredOnlineState();
+
+  if (!onlineState.activeKey) {
+    return null;
+  }
+
+  if (!ONLINE_CONTENT[onlineState.activeKey]) {
+    return null;
+  }
+
+  return ONLINE_CONTENT[onlineState.activeKey];
+}
+
+function formatDateTime(timestamp) {
+  if (!timestamp) {
+    return 'non impostata';
+  }
+
+  return new Date(timestamp).toLocaleString('it-IT');
+}
+
+function setOnlineContent(key, durationMs) {
+  onlineState.activeKey = key;
+  onlineState.expiresAt = Date.now() + durationMs;
+}
+
+function clearOnlineContent() {
+  onlineState.activeKey = null;
+  onlineState.expiresAt = null;
+}
+
+function getMainMenuKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '📸 Foto online', callback_data: 'menu_foto_online' },
+          { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
+        ],
+        [
+          { text: '🌐 Sito', callback_data: 'menu_sito' },
+          { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' }
+        ]
+      ]
+    }
+  };
+}
+
+function sendMainMenu(chatId) {
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/sito\n/foto\n/online_one\n/online_two'
+    'Benvenuto nel self service Motoevasioni.\n\nScegli una voce dal menu:',
+    getMainMenuKeyboard()
   );
-});
+}
 
-bot.onText(/\/help/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    'Comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo aiuto\n/sito - Apri il sito Motoevasioni\n/foto - Vedi promo GridPass\n/online_one - Invia grafica foto online 1\n/online_two - Invia grafica foto online 2'
-  );
-});
-
-bot.onText(/\/sito/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    'Apri il sito Motoevasioni:',
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: 'Vai al sito',
-              url: 'https://www.motoevasioni.it/'
-            }
-          ]
-        ]
-      }
-    }
-  );
-});
-
-bot.onText(/\/foto/, (msg) => {
+function sendGridPassPromo(chatId) {
   bot.sendPhoto(
-    msg.chat.id,
+    chatId,
     'gridpass-promo.png',
     {
       caption:
@@ -76,20 +141,89 @@ bot.onText(/\/foto/, (msg) => {
       }
     }
   );
-});
+}
 
-bot.onText(/\/online_one/, (msg) => {
+function sendActiveOnlineContent(chatId) {
+  const activeContent = getActiveOnlineContent();
+
+  if (!activeContent) {
+    bot.sendMessage(
+      chatId,
+      'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
+    );
+    return;
+  }
+
   bot.sendPhoto(
-    msg.chat.id,
-    'online_one.png',
+    chatId,
+    activeContent.file,
     {
-      caption: '🏍️ Trova la foto, rivivi l’emozione e condividila.',
+      caption: activeContent.caption,
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: 'Trova la foto',
-              url: 'https://www.motoevasioni.it/foto-moto-passi/'
+              text: activeContent.buttonText,
+              url: activeContent.buttonUrl
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const startParam = match && match[1] ? match[1].trim() : '';
+
+  if (startParam === 'segnalazione_passi') {
+    userState[chatId] = { step: 'tipo' };
+
+    bot.sendMessage(
+      chatId,
+      'Segnalazione live attivata.\n\nScrivi il tipo di segnalazione:\n- meteo\n- traffico\n- strada\n- chiusura'
+    );
+    return;
+  }
+
+  bot.sendMessage(
+    chatId,
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online'
+  );
+
+  sendMainMenu(chatId);
+});
+
+bot.onText(/\/help/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    'Comandi disponibili:\n' +
+    '/start - Avvia il bot\n' +
+    '/help - Mostra questo aiuto\n' +
+    '/menu - Apri il menu self service\n' +
+    '/sito - Apri il sito Motoevasioni\n' +
+    '/foto - Vedi promo GridPass\n' +
+    '/foto_online - Controlla se le foto online sono disponibili\n' +
+    '/id - Mostra il tuo chat ID'
+  );
+});
+
+bot.onText(/\/menu/, (msg) => {
+  sendMainMenu(msg.chat.id);
+});
+
+bot.onText(/\/sito/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    'Apri il sito Motoevasioni:',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Vai al sito',
+              url: 'https://www.motoevasioni.it/'
             }
           ]
         ]
@@ -98,24 +232,151 @@ bot.onText(/\/online_one/, (msg) => {
   );
 });
 
-bot.onText(/\/online_two/, (msg) => {
-  bot.sendPhoto(
+bot.onText(/\/foto$/, (msg) => {
+  sendGridPassPromo(msg.chat.id);
+});
+
+bot.onText(/\/foto_online$/, (msg) => {
+  sendActiveOnlineContent(msg.chat.id);
+});
+
+/*
+  COMANDI ADMIN FOTO ONLINE
+
+  Uso:
+  /attiva_online_one
+  /attiva_online_two
+
+  Default scadenza: 5 giorni
+
+  Oppure con ore personalizzate:
+  /attiva_online_one 72
+  /attiva_online_two 96
+
+  Disattiva:
+  /disattiva_online
+
+  Stato:
+  /stato_online
+*/
+
+bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  const ore = match && match[1] ? parseInt(match[1], 10) : null;
+  const durationMs = ore && ore > 0 ? ore * 60 * 60 * 1000 : getDefaultExpiryMs();
+
+  setOnlineContent('online_one', durationMs);
+
+  bot.sendMessage(
     msg.chat.id,
-    'online_two.png',
-    {
-      caption: '🏍️ Trova la foto, rivivi l’emozione e condividila.',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: 'Trova la foto',
-              url: 'https://www.motoevasioni.it/foto-moto-passi/'
-            }
-          ]
-        ]
-      }
-    }
+    'online_one attivato.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
   );
+});
+
+bot.onText(/\/attiva_online_two(?:\s+(\d+))?$/, (msg, match) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  const ore = match && match[1] ? parseInt(match[1], 10) : null;
+  const durationMs = ore && ore > 0 ? ore * 60 * 60 * 1000 : getDefaultExpiryMs();
+
+  setOnlineContent('online_two', durationMs);
+
+  bot.sendMessage(
+    msg.chat.id,
+    'online_two attivato.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
+  );
+});
+
+bot.onText(/\/disattiva_online$/, (msg) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  clearOnlineContent();
+
+  bot.sendMessage(
+    msg.chat.id,
+    'Contenuto foto online disattivato.'
+  );
+});
+
+bot.onText(/\/stato_online$/, (msg) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  cleanupExpiredOnlineState();
+
+  if (!onlineState.activeKey) {
+    bot.sendMessage(
+      msg.chat.id,
+      'Nessun contenuto foto online è attivo in questo momento.'
+    );
+    return;
+  }
+
+  bot.sendMessage(
+    msg.chat.id,
+    'Contenuto attivo: ' + onlineState.activeKey + '\n' +
+    'Scadenza: ' + formatDateTime(onlineState.expiresAt)
+  );
+});
+
+bot.on('callback_query', (query) => {
+  const chatId = query.message.chat.id;
+  const data = query.data;
+
+  if (data === 'menu_foto_online') {
+    bot.answerCallbackQuery(query.id);
+    sendActiveOnlineContent(chatId);
+    return;
+  }
+
+  if (data === 'menu_gridpass') {
+    bot.answerCallbackQuery(query.id);
+    sendGridPassPromo(chatId);
+    return;
+  }
+
+  if (data === 'menu_sito') {
+    bot.answerCallbackQuery(query.id);
+    bot.sendMessage(
+      chatId,
+      'Apri il sito Motoevasioni:',
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Vai al sito',
+                url: 'https://www.motoevasioni.it/'
+              }
+            ]
+          ]
+        }
+      }
+    );
+    return;
+  }
+
+  if (data === 'menu_segnalazioni') {
+    bot.answerCallbackQuery(query.id);
+
+    userState[chatId] = { step: 'tipo' };
+
+    bot.sendMessage(
+      chatId,
+      'Segnalazione live attivata.\n\nScrivi il tipo di segnalazione:\n- meteo\n- traffico\n- strada\n- chiusura'
+    );
+    return;
+  }
+
+  bot.answerCallbackQuery(query.id);
 });
 
 bot.on('message', (msg) => {
@@ -179,6 +440,10 @@ bot.on('message', (msg) => {
 
 bot.onText(/\/id/, (msg) => {
   bot.sendMessage(msg.chat.id, 'Il tuo chat ID è: ' + msg.chat.id);
+});
+
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error.message);
 });
 
 console.log('Bot avviato.');
