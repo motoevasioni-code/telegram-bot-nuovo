@@ -1,4 +1,3 @@
-cat /Users/motoevasioni/telegram-bot-nuovo/index.js
 const TelegramBot = require('node-telegram-bot-api');
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -75,7 +74,7 @@ bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  console.log("CHAT_ID:", chatId, "TEXT:", text);
+  console.log('CHAT_ID:', chatId, 'TEXT:', text);
 
   if (!text) {
     return;
@@ -122,4 +121,3 @@ bot.on('message', (msg) => {
 });
 
 console.log('Bot avviato.');
-motoevasioni@iMacdiMevasioni telegram-bot-nuovo % 
