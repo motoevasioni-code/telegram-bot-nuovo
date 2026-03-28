@@ -4,6 +4,8 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
 const userState = {};
 
+const ADMIN_CHAT_ID = 1402209413;
+
 bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
   const chatId = msg.chat.id;
   const startParam = match && match[1] ? match[1].trim() : '';
