@@ -116,6 +116,15 @@ bot.on('message', (msg) => {
       'Messaggio: ' + userState[chatId].testo + '\n\n' +
       'La segnalazione verrà valutata prima di eventuale pubblicazione.';
 
+    bot.sendMessage(
+      ADMIN_CHAT_ID,
+      'Nuova segnalazione ricevuta:\n\n' +
+      'Da chat ID: ' + chatId + '\n' +
+      'Tipo: ' + userState[chatId].tipo + '\n' +
+      'Passo/zona: ' + userState[chatId].passo + '\n' +
+      'Messaggio: ' + userState[chatId].testo
+    );
+
     delete userState[chatId];
 
     bot.sendMessage(chatId, riepilogo);
