@@ -53,23 +53,53 @@ bot.onText(/\/sito/, (msg) => {
 });
 
 bot.onText(/\/foto/, (msg) => {
+  const immagini = [
+    'gridpass-promo.png',
+    'online_one.png',
+    'online_two.png'
+  ];
+
+  const immagineScelta = immagini[Math.floor(Math.random() * immagini.length)];
+
+  if (immagineScelta === 'gridpass-promo.png') {
+    bot.sendPhoto(
+      msg.chat.id,
+      'gridpass-promo.png',
+      {
+        caption:
+          '🏍️ GridPass® Abbonamento Stagionale\n\n' +
+          'Entra nell’accesso riservato Motoevasioni dedicato a chi vive davvero la strada.\n\n' +
+          '✅ Accesso riservato\n' +
+          '✅ Sconto 20% sulle foto digitali\n' +
+          '✅ Presto nuove convenzioni dedicate\n' +
+          '✅ Vantaggi esclusivi per i biker attivi',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'ATTIVA ORA',
+                url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
+              }
+            ]
+          ]
+        }
+      }
+    );
+    return;
+  }
+
   bot.sendPhoto(
     msg.chat.id,
-    'gridpass-promo.png',
+    immagineScelta,
     {
       caption:
-        '🏍️ GridPass® Abbonamento Stagionale\n\n' +
-        'Entra nell’accesso riservato Motoevasioni dedicato a chi vive davvero la strada.\n\n' +
-        '✅ Accesso riservato\n' +
-        '✅ Sconto 20% sulle foto digitali\n' +
-        '✅ Presto nuove convenzioni dedicate\n' +
-        '✅ Vantaggi esclusivi per i biker attivi',
+        '🏍️ Trova la foto, rivivi l’emozione e condividila.',
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: 'ATTIVA ORA',
-              url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
+              text: 'Trova la foto',
+              url: 'https://www.motoevasioni.it/foto-moto-passi/'
             }
           ]
         ]
