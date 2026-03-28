@@ -22,14 +22,14 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/sito\n/foto'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/sito\n/foto\n/online_one\n/online_two'
   );
 });
 
 bot.onText(/\/help/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    'Comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo aiuto\n/sito - Apri il sito Motoevasioni\n/foto - Vedi promo GridPass'
+    'Comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo aiuto\n/sito - Apri il sito Motoevasioni\n/foto - Vedi promo GridPass\n/online_one - Invia grafica foto online 1\n/online_two - Invia grafica foto online 2'
   );
 });
 
@@ -53,47 +53,57 @@ bot.onText(/\/sito/, (msg) => {
 });
 
 bot.onText(/\/foto/, (msg) => {
-  const immagini = [
-    'gridpass-promo.png',
-    'online_one.png',
-    'online_two.png'
-  ];
-
-  const immagineScelta = immagini[Math.floor(Math.random() * immagini.length)];
-
-  if (immagineScelta === 'gridpass-promo.png') {
-    bot.sendPhoto(
-      msg.chat.id,
-      'gridpass-promo.png',
-      {
-        caption:
-          '🏍️ GridPass® Abbonamento Stagionale\n\n' +
-          'Entra nell’accesso riservato Motoevasioni dedicato a chi vive davvero la strada.\n\n' +
-          '✅ Accesso riservato\n' +
-          '✅ Sconto 20% sulle foto digitali\n' +
-          '✅ Presto nuove convenzioni dedicate\n' +
-          '✅ Vantaggi esclusivi per i biker attivi',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: 'ATTIVA ORA',
-                url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
-              }
-            ]
-          ]
-        }
-      }
-    );
-    return;
-  }
-
   bot.sendPhoto(
     msg.chat.id,
-    immagineScelta,
+    'gridpass-promo.png',
     {
       caption:
-        '🏍️ Trova la foto, rivivi l’emozione e condividila.',
+        '🏍️ GridPass® Abbonamento Stagionale\n\n' +
+        'Entra nell’accesso riservato Motoevasioni dedicato a chi vive davvero la strada.\n\n' +
+        '✅ Accesso riservato\n' +
+        '✅ Sconto 20% sulle foto digitali\n' +
+        '✅ Presto nuove convenzioni dedicate\n' +
+        '✅ Vantaggi esclusivi per i biker attivi',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'ATTIVA ORA',
+              url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+});
+
+bot.onText(/\/online_one/, (msg) => {
+  bot.sendPhoto(
+    msg.chat.id,
+    'online_one.png',
+    {
+      caption: '🏍️ Trova la foto, rivivi l’emozione e condividila.',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Trova la foto',
+              url: 'https://www.motoevasioni.it/foto-moto-passi/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+});
+
+bot.onText(/\/online_two/, (msg) => {
+  bot.sendPhoto(
+    msg.chat.id,
+    'online_two.png',
+    {
+      caption: '🏍️ Trova la foto, rivivi l’emozione e condividila.',
       reply_markup: {
         inline_keyboard: [
           [
