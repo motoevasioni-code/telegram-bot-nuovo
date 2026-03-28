@@ -57,12 +57,18 @@ bot.onText(/\/foto/, (msg) => {
     msg.chat.id,
     'gridpass-promo.png',
     {
-      caption: 'Scopri GridPass Pass Stagionale 2025 e tutti i vantaggi dedicati ai biker.',
+      caption:
+        '🏍️ GridPass® Abbonamento Stagionale\n\n' +
+        'Entra nell’accesso riservato Motoevasioni dedicato a chi vive davvero la strada.\n\n' +
+        '✅ Accesso riservato\n' +
+        '✅ Sconto 20% sulle foto digitali\n' +
+        '✅ Presto nuove convenzioni dedicate\n' +
+        '✅ Vantaggi esclusivi per i biker attivi',
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: 'Abbonamento stagionale',
+              text: 'ATTIVA ORA',
               url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
             }
           ]
