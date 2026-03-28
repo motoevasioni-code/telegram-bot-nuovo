@@ -1,17 +1,28 @@
 const TelegramBot = require('node-telegram-bot-api');
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const SITE_URL = process.env.SITE_URL || 'https://www.motoevasioni.it/';
+const WORDPRESS_BRIDGE_URL =
+  process.env.WORDPRESS_BRIDGE_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/active-photo';
+const WORDPRESS_BRIDGE_KEY = process.env.WORDPRESS_BRIDGE_KEY || '';
+
+if (!BOT_TOKEN) {
+  console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
+  process.exit(1);
+}
+
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 const userState = {};
 
 const ADMIN_CHAT_ID = 1402209413;
 
 /*
-  STATO FOTO ONLINE
-  - activeKey: null | 'online_one' | 'online_two'
-  - expiresAt: timestamp in millisecondi oppure null
-  - In questa versione lo stato è in memoria.
-  - Se il bot viene riavviato, questo stato si azzera.
+  STATO FOTO ONLINE LEGACY
+  - Rimane come backup temporaneo per non perdere nulla.
+  - Il sistema principale ora è WordPress Bridge.
+  - Se WordPress non risponde, il bot può ancora usare questo fallback.
 */
 const onlineState = {
   activeKey: null,
@@ -38,10 +49,6 @@ function isAdmin(chatId) {
 }
 
 function getDefaultExpiryMs() {
-  /*
-    Default: 5 giorni
-    Puoi cambiarlo quando vuoi.
-  */
   return 5 * 24 * 60 * 60 * 1000;
 }
 
@@ -143,34 +150,156 @@ function sendGridPassPromo(chatId) {
   );
 }
 
-function sendActiveOnlineContent(chatId) {
-  const activeContent = getActiveOnlineContent();
+function normalizeText(value) {
+  if (!value) {
+    return '';
+  }
 
-  if (!activeContent) {
-    bot.sendMessage(
+  return String(value).trim();
+}
+
+function buildPhotoCaptionFromWordPress(item) {
+  const parts = [];
+
+  if (item.title) {
+    parts.push(`🏍️ ${normalizeText(item.title)}`);
+  }
+
+  if (item.content) {
+    parts.push(normalizeText(item.content));
+  }
+
+  return parts.join('\n\n').trim();
+}
+
+async function fetchWordPressActivePhoto() {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const url =
+      `${WORDPRESS_BRIDGE_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      throw new Error('Risposta JSON non valida');
+    }
+
+    if (!data.found || !data.item) {
+      return null;
+    }
+
+    return data.item;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendActiveOnlineContent(chatId) {
+  /*
+    Ordine logico:
+    1. prova WordPress Bridge (nuovo sistema persistente)
+    2. se non trova nulla, messaggio standard
+    3. se WordPress fallisce, fallback legacy in memoria
+  */
+  try {
+    const wpItem = await fetchWordPressActivePhoto();
+
+    if (wpItem) {
+      const caption =
+        buildPhotoCaptionFromWordPress(wpItem) ||
+        '🏍️ Sono disponibili nuove foto online.';
+
+      const hasButton = wpItem.button_label && wpItem.button_url;
+      const replyMarkup = hasButton
+        ? {
+            inline_keyboard: [
+              [
+                {
+                  text: wpItem.button_label,
+                  url: wpItem.button_url
+                }
+              ]
+            ]
+          }
+        : {
+            inline_keyboard: [
+              [
+                {
+                  text: 'Vai al sito',
+                  url: SITE_URL
+                }
+              ]
+            ]
+          };
+
+      if (wpItem.image_url) {
+        await bot.sendPhoto(chatId, wpItem.image_url, {
+          caption,
+          reply_markup: replyMarkup
+        });
+        return;
+      }
+
+      await bot.sendMessage(chatId, caption, {
+        reply_markup: replyMarkup
+      });
+      return;
+    }
+
+    await bot.sendMessage(
       chatId,
       'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
     );
     return;
-  }
+  } catch (error) {
+    console.error('Errore WordPress Bridge /foto_online:', error.message);
 
-  bot.sendPhoto(
-    chatId,
-    activeContent.file,
-    {
-      caption: activeContent.caption,
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: activeContent.buttonText,
-              url: activeContent.buttonUrl
-            }
-          ]
-        ]
-      }
+    const activeContent = getActiveOnlineContent();
+
+    if (!activeContent) {
+      await bot.sendMessage(
+        chatId,
+        'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
+      );
+      return;
     }
-  );
+
+    await bot.sendPhoto(
+      chatId,
+      activeContent.file,
+      {
+        caption: activeContent.caption,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: activeContent.buttonText,
+                url: activeContent.buttonUrl
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
 }
 
 bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
@@ -236,28 +365,15 @@ bot.onText(/\/foto$/, (msg) => {
   sendGridPassPromo(msg.chat.id);
 });
 
-bot.onText(/\/foto_online$/, (msg) => {
-  sendActiveOnlineContent(msg.chat.id);
+bot.onText(/\/foto_online$/, async (msg) => {
+  await sendActiveOnlineContent(msg.chat.id);
 });
 
 /*
-  COMANDI ADMIN FOTO ONLINE
+  COMANDI ADMIN FOTO ONLINE LEGACY
 
-  Uso:
-  /attiva_online_one
-  /attiva_online_two
-
-  Default scadenza: 5 giorni
-
-  Oppure con ore personalizzate:
-  /attiva_online_one 72
-  /attiva_online_two 96
-
-  Disattiva:
-  /disattiva_online
-
-  Stato:
-  /stato_online
+  Restano attivi come backup temporaneo.
+  Non sono più il sistema principale.
 */
 
 bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
@@ -272,7 +388,7 @@ bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
 
   bot.sendMessage(
     msg.chat.id,
-    'online_one attivato.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
+    'online_one attivato come fallback legacy.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
   );
 });
 
@@ -288,7 +404,7 @@ bot.onText(/\/attiva_online_two(?:\s+(\d+))?$/, (msg, match) => {
 
   bot.sendMessage(
     msg.chat.id,
-    'online_two attivato.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
+    'online_two attivato come fallback legacy.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
   );
 });
 
@@ -301,39 +417,55 @@ bot.onText(/\/disattiva_online$/, (msg) => {
 
   bot.sendMessage(
     msg.chat.id,
-    'Contenuto foto online disattivato.'
+    'Contenuto foto online legacy disattivato.'
   );
 });
 
-bot.onText(/\/stato_online$/, (msg) => {
+bot.onText(/\/stato_online$/, async (msg) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
 
   cleanupExpiredOnlineState();
 
-  if (!onlineState.activeKey) {
-    bot.sendMessage(
-      msg.chat.id,
-      'Nessun contenuto foto online è attivo in questo momento.'
-    );
-    return;
+  let wpStatusText = 'WordPress Bridge: non disponibile';
+
+  try {
+    const wpItem = await fetchWordPressActivePhoto();
+
+    if (wpItem) {
+      wpStatusText =
+        'WordPress Bridge: attivo\n' +
+        'Titolo: ' + (wpItem.title || '(senza titolo)') + '\n' +
+        'ID voce: ' + wpItem.id;
+    } else {
+      wpStatusText = 'WordPress Bridge: nessuna voce attiva';
+    }
+  } catch (error) {
+    wpStatusText = 'WordPress Bridge: errore (' + error.message + ')';
+  }
+
+  let legacyText = 'Legacy fallback: nessun contenuto attivo';
+
+  if (onlineState.activeKey) {
+    legacyText =
+      'Legacy fallback: ' + onlineState.activeKey + '\n' +
+      'Scadenza: ' + formatDateTime(onlineState.expiresAt);
   }
 
   bot.sendMessage(
     msg.chat.id,
-    'Contenuto attivo: ' + onlineState.activeKey + '\n' +
-    'Scadenza: ' + formatDateTime(onlineState.expiresAt)
+    wpStatusText + '\n\n' + legacyText
   );
 });
 
-bot.on('callback_query', (query) => {
+bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
 
   if (data === 'menu_foto_online') {
     bot.answerCallbackQuery(query.id);
-    sendActiveOnlineContent(chatId);
+    await sendActiveOnlineContent(chatId);
     return;
   }
 
