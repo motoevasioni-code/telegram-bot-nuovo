@@ -120,4 +120,8 @@ bot.on('message', (msg) => {
   }
 });
 
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(msg.chat.id, 'Il tuo chat ID è: ' + msg.chat.id);
+});
+
 console.log('Bot avviato.');
