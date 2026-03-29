@@ -6,6 +6,9 @@ const WORDPRESS_BRIDGE_URL =
   process.env.WORDPRESS_BRIDGE_URL ||
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/active-photo';
 const WORDPRESS_BRIDGE_KEY = process.env.WORDPRESS_BRIDGE_KEY || '';
+const WORDPRESS_REPORT_URL =
+  process.env.WORDPRESS_REPORT_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/report';
 
 if (!BOT_TOKEN) {
   console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
@@ -15,14 +18,11 @@ if (!BOT_TOKEN) {
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 const userState = {};
-
 const ADMIN_CHAT_ID = 1402209413;
 
 /*
   STATO FOTO ONLINE LEGACY
-  - Rimane come backup temporaneo per non perdere nulla.
-  - Il sistema principale ora è WordPress Bridge.
-  - Se WordPress non risponde, il bot può ancora usare questo fallback.
+  - backup temporaneo
 */
 const onlineState = {
   activeKey: null,
@@ -212,13 +212,45 @@ async function fetchWordPressActivePhoto() {
   }
 }
 
+async function saveReportToWordPress(reportData) {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const url =
+      `${WORDPRESS_REPORT_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(reportData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      throw new Error('Salvataggio segnalazione non riuscito');
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function sendActiveOnlineContent(chatId) {
-  /*
-    Ordine logico:
-    1. prova WordPress Bridge (nuovo sistema persistente)
-    2. se non trova nulla, messaggio standard
-    3. se WordPress fallisce, fallback legacy in memoria
-  */
   try {
     const wpItem = await fetchWordPressActivePhoto();
 
@@ -227,9 +259,31 @@ async function sendActiveOnlineContent(chatId) {
         buildPhotoCaptionFromWordPress(wpItem) ||
         '🏍️ Sono disponibili nuove foto online.';
 
-      const hasButton = wpItem.button_label && wpItem.button_url;
-      const replyMarkup = hasButton
-        ? {
+      if (wpItem.image_url) {
+        if (wpItem.button_label && wpItem.button_url) {
+          await bot.sendPhoto(chatId, wpItem.image_url, {
+            caption,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: wpItem.button_label,
+                    url: wpItem.button_url
+                  }
+                ]
+              ]
+            }
+          });
+          return;
+        }
+
+        await bot.sendPhoto(chatId, wpItem.image_url, { caption });
+        return;
+      }
+
+      if (wpItem.button_label && wpItem.button_url) {
+        await bot.sendMessage(chatId, caption, {
+          reply_markup: {
             inline_keyboard: [
               [
                 {
@@ -239,28 +293,11 @@ async function sendActiveOnlineContent(chatId) {
               ]
             ]
           }
-        : {
-            inline_keyboard: [
-              [
-                {
-                  text: 'Vai al sito',
-                  url: SITE_URL
-                }
-              ]
-            ]
-          };
-
-      if (wpItem.image_url) {
-        await bot.sendPhoto(chatId, wpItem.image_url, {
-          caption,
-          reply_markup: replyMarkup
         });
         return;
       }
 
-      await bot.sendMessage(chatId, caption, {
-        reply_markup: replyMarkup
-      });
+      await bot.sendMessage(chatId, caption);
       return;
     }
 
@@ -373,9 +410,7 @@ bot.onText(/\/foto_online$/, async (msg) => {
   COMANDI ADMIN FOTO ONLINE LEGACY
 
   Restano attivi come backup temporaneo.
-  Non sono più il sistema principale.
 */
-
 bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
   if (!isAdmin(msg.chat.id)) {
     return;
@@ -511,7 +546,7 @@ bot.on('callback_query', async (query) => {
   bot.answerCallbackQuery(query.id);
 });
 
-bot.on('message', (msg) => {
+bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
@@ -548,6 +583,28 @@ bot.on('message', (msg) => {
   if (userState[chatId].step === 'testo') {
     userState[chatId].testo = text;
 
+    const reportPayload = {
+      chat_id: chatId,
+      username: msg.from && msg.from.username ? String(msg.from.username) : '',
+      first_name: msg.from && msg.from.first_name ? String(msg.from.first_name) : '',
+      last_name: msg.from && msg.from.last_name ? String(msg.from.last_name) : '',
+      report_type: userState[chatId].tipo ? String(userState[chatId].tipo).trim().toLowerCase() : '',
+      location_name: userState[chatId].passo ? String(userState[chatId].passo).trim() : '',
+      message_text: userState[chatId].testo ? String(userState[chatId].testo).trim() : '',
+      status: 'new',
+      source: 'telegram'
+    };
+
+    let wpSaveNote = 'Salvataggio WordPress: non eseguito.';
+
+    try {
+      const wpResult = await saveReportToWordPress(reportPayload);
+      wpSaveNote = 'Salvataggio WordPress: OK (ID ' + wpResult.report_id + ').';
+    } catch (error) {
+      console.error('Errore salvataggio segnalazione su WordPress:', error.message);
+      wpSaveNote = 'Salvataggio WordPress: errore.';
+    }
+
     const riepilogo =
       'Segnalazione ricevuta.\n\n' +
       'Tipo: ' + userState[chatId].tipo + '\n' +
@@ -561,7 +618,8 @@ bot.on('message', (msg) => {
       'Da chat ID: ' + chatId + '\n' +
       'Tipo: ' + userState[chatId].tipo + '\n' +
       'Passo/zona: ' + userState[chatId].passo + '\n' +
-      'Messaggio: ' + userState[chatId].testo
+      'Messaggio: ' + userState[chatId].testo + '\n' +
+      wpSaveNote
     );
 
     delete userState[chatId];
