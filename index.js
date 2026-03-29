@@ -172,6 +172,14 @@ function buildPhotoCaptionFromWordPress(item) {
   return parts.join('\n\n').trim();
 }
 
+function getWordPressBridgeUrlWithKey() {
+  return `${WORDPRESS_BRIDGE_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+}
+
+function getWordPressReportUrlWithKey() {
+  return `${WORDPRESS_REPORT_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+}
+
 async function fetchWordPressActivePhoto() {
   if (!WORDPRESS_BRIDGE_KEY) {
     throw new Error('WORDPRESS_BRIDGE_KEY mancante');
@@ -181,10 +189,7 @@ async function fetchWordPressActivePhoto() {
   const timeout = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const url =
-      `${WORDPRESS_BRIDGE_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(getWordPressBridgeUrlWithKey(), {
       method: 'GET',
       signal: controller.signal,
       headers: {
@@ -221,10 +226,7 @@ async function saveReportToWordPress(reportData) {
   const timeout = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const url =
-      `${WORDPRESS_REPORT_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(getWordPressReportUrlWithKey(), {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -250,39 +252,61 @@ async function saveReportToWordPress(reportData) {
   }
 }
 
+async function sendLegacyOnlineContent(chatId) {
+  const activeContent = getActiveOnlineContent();
+
+  if (!activeContent) {
+    await bot.sendMessage(
+      chatId,
+      'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
+    );
+    return false;
+  }
+
+  await bot.sendPhoto(
+    chatId,
+    activeContent.file,
+    {
+      caption: activeContent.caption,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: activeContent.buttonText,
+              url: activeContent.buttonUrl
+            }
+          ]
+        ]
+      }
+    }
+  );
+
+  return true;
+}
+
 async function sendActiveOnlineContent(chatId) {
   try {
     const wpItem = await fetchWordPressActivePhoto();
 
-    if (wpItem) {
-      const caption =
-        buildPhotoCaptionFromWordPress(wpItem) ||
-        '🏍️ Sono disponibili nuove foto online.';
-
-      if (wpItem.image_url) {
-        if (wpItem.button_label && wpItem.button_url) {
-          await bot.sendPhoto(chatId, wpItem.image_url, {
-            caption,
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: wpItem.button_label,
-                    url: wpItem.button_url
-                  }
-                ]
-              ]
-            }
-          });
-          return;
-        }
-
-        await bot.sendPhoto(chatId, wpItem.image_url, { caption });
-        return;
+    if (!wpItem) {
+      const sentLegacy = await sendLegacyOnlineContent(chatId);
+      if (!sentLegacy) {
+        await bot.sendMessage(
+          chatId,
+          'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
+        );
       }
+      return;
+    }
 
+    const caption =
+      buildPhotoCaptionFromWordPress(wpItem) ||
+      '🏍️ Sono disponibili nuove foto online.';
+
+    if (wpItem.image_url) {
       if (wpItem.button_label && wpItem.button_url) {
-        await bot.sendMessage(chatId, caption, {
+        await bot.sendPhoto(chatId, wpItem.image_url, {
+          caption,
           reply_markup: {
             inline_keyboard: [
               [
@@ -297,45 +321,71 @@ async function sendActiveOnlineContent(chatId) {
         return;
       }
 
-      await bot.sendMessage(chatId, caption);
+      await bot.sendPhoto(chatId, wpItem.image_url, { caption });
       return;
     }
 
-    await bot.sendMessage(
-      chatId,
-      'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
-    );
-    return;
-  } catch (error) {
-    console.error('Errore WordPress Bridge /foto_online:', error.message);
-
-    const activeContent = getActiveOnlineContent();
-
-    if (!activeContent) {
-      await bot.sendMessage(
-        chatId,
-        'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
-      );
-      return;
-    }
-
-    await bot.sendPhoto(
-      chatId,
-      activeContent.file,
-      {
-        caption: activeContent.caption,
+    if (wpItem.button_label && wpItem.button_url) {
+      await bot.sendMessage(chatId, caption, {
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: activeContent.buttonText,
-                url: activeContent.buttonUrl
+                text: wpItem.button_label,
+                url: wpItem.button_url
               }
             ]
           ]
         }
-      }
+      });
+      return;
+    }
+
+    await bot.sendMessage(chatId, caption);
+  } catch (error) {
+    console.error('Errore WordPress Bridge /foto_online:', error.message);
+
+    const sentLegacy = await sendLegacyOnlineContent(chatId);
+
+    if (!sentLegacy) {
+      await bot.sendMessage(
+        chatId,
+        'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
+      );
+    }
+  }
+}
+
+async function getWordPressPhotoStatusText() {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    return (
+      'WordPress Bridge: errore\n' +
+      'Motivo: WORDPRESS_BRIDGE_KEY mancante nelle variabili ambiente.'
     );
+  }
+
+  try {
+    const wpItem = await fetchWordPressActivePhoto();
+
+    if (wpItem) {
+      return (
+        'WordPress Bridge: attivo\n' +
+        'Titolo: ' + (wpItem.title || '(senza titolo)') + '\n' +
+        'ID voce: ' + wpItem.id + '\n' +
+        'Bottone: ' + (wpItem.button_label || '(vuoto)') + '\n' +
+        'URL: ' + (wpItem.button_url || '(vuoto)')
+      );
+    }
+
+    return (
+      'WordPress Bridge: nessuna voce attiva\n' +
+      'Controlla nel plugin:\n' +
+      '- stato = active\n' +
+      '- data inizio/fine valide\n' +
+      '- voce realmente salvata'
+    );
+  } catch (error) {
+    return 'WordPress Bridge: errore (' + error.message + ')';
   }
 }
 
@@ -389,7 +439,7 @@ bot.onText(/\/sito/, (msg) => {
           [
             {
               text: 'Vai al sito',
-              url: 'https://www.motoevasioni.it/'
+              url: SITE_URL
             }
           ]
         ]
@@ -463,22 +513,7 @@ bot.onText(/\/stato_online$/, async (msg) => {
 
   cleanupExpiredOnlineState();
 
-  let wpStatusText = 'WordPress Bridge: non disponibile';
-
-  try {
-    const wpItem = await fetchWordPressActivePhoto();
-
-    if (wpItem) {
-      wpStatusText =
-        'WordPress Bridge: attivo\n' +
-        'Titolo: ' + (wpItem.title || '(senza titolo)') + '\n' +
-        'ID voce: ' + wpItem.id;
-    } else {
-      wpStatusText = 'WordPress Bridge: nessuna voce attiva';
-    }
-  } catch (error) {
-    wpStatusText = 'WordPress Bridge: errore (' + error.message + ')';
-  }
+  const wpStatusText = await getWordPressPhotoStatusText();
 
   let legacyText = 'Legacy fallback: nessun contenuto attivo';
 
@@ -492,6 +527,38 @@ bot.onText(/\/stato_online$/, async (msg) => {
     msg.chat.id,
     wpStatusText + '\n\n' + legacyText
   );
+});
+
+bot.onText(/\/debug_foto_online$/, async (msg) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  const lines = [];
+
+  lines.push('DEBUG FOTO ONLINE');
+  lines.push('');
+  lines.push('BOT_TOKEN: ' + (BOT_TOKEN ? 'OK' : 'MANCANTE'));
+  lines.push('WORDPRESS_BRIDGE_URL: ' + WORDPRESS_BRIDGE_URL);
+  lines.push('WORDPRESS_BRIDGE_KEY: ' + (WORDPRESS_BRIDGE_KEY ? 'OK' : 'MANCANTE'));
+  lines.push('WORDPRESS_REPORT_URL: ' + WORDPRESS_REPORT_URL);
+  lines.push('');
+
+  const wpStatusText = await getWordPressPhotoStatusText();
+  lines.push(wpStatusText);
+  lines.push('');
+
+  cleanupExpiredOnlineState();
+
+  if (onlineState.activeKey) {
+    lines.push('Legacy fallback: attivo');
+    lines.push('Chiave: ' + onlineState.activeKey);
+    lines.push('Scadenza: ' + formatDateTime(onlineState.expiresAt));
+  } else {
+    lines.push('Legacy fallback: nessun contenuto attivo');
+  }
+
+  await bot.sendMessage(msg.chat.id, lines.join('\n'));
 });
 
 bot.on('callback_query', async (query) => {
@@ -521,7 +588,7 @@ bot.on('callback_query', async (query) => {
             [
               {
                 text: 'Vai al sito',
-                url: 'https://www.motoevasioni.it/'
+                url: SITE_URL
               }
             ]
           ]
