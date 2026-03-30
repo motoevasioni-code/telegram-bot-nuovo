@@ -481,7 +481,7 @@ bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
 bot.onText(/\/rivista/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/la-strada-della-passione'
+    'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/m-ss71-rivista-motoevasioni/'
   );
 });
 
