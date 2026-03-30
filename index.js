@@ -405,7 +405,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/rivista'
   );
 
   sendMainMenu(chatId);
@@ -421,6 +421,7 @@ bot.onText(/\/help/, (msg) => {
     '/sito - Apri il sito Motoevasioni\n' +
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
+    '/rivista — Apri la Rivista Motoevasioni\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
@@ -474,6 +475,13 @@ bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
   bot.sendMessage(
     msg.chat.id,
     'online_one attivato come fallback legacy.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
+  );
+});
+
+bot.onText(/\/rivista/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/rivista-m-ss71/'
   );
 });
 
