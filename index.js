@@ -252,14 +252,17 @@ async function saveReportToWordPress(reportData) {
   }
 }
 
+/*
+  IMPORTANTE:
+  Questa funzione NON deve mandare il messaggio "non disponibili".
+  Deve solo:
+  - inviare il contenuto legacy se esiste => return true
+  - non inviare nulla se non esiste => return false
+*/
 async function sendLegacyOnlineContent(chatId) {
   const activeContent = getActiveOnlineContent();
 
   if (!activeContent) {
-    await bot.sendMessage(
-      chatId,
-      'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
-    );
     return false;
   }
 
@@ -284,18 +287,24 @@ async function sendLegacyOnlineContent(chatId) {
   return true;
 }
 
+async function sendOnlineNotAvailableMessage(chatId) {
+  await bot.sendMessage(
+    chatId,
+    'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
+  );
+}
+
 async function sendActiveOnlineContent(chatId) {
   try {
     const wpItem = await fetchWordPressActivePhoto();
 
     if (!wpItem) {
       const sentLegacy = await sendLegacyOnlineContent(chatId);
+
       if (!sentLegacy) {
-        await bot.sendMessage(
-          chatId,
-          'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
-        );
+        await sendOnlineNotAvailableMessage(chatId);
       }
+
       return;
     }
 
@@ -348,10 +357,7 @@ async function sendActiveOnlineContent(chatId) {
     const sentLegacy = await sendLegacyOnlineContent(chatId);
 
     if (!sentLegacy) {
-      await bot.sendMessage(
-        chatId,
-        'Le foto online non sono disponibili in questo momento.\n\nRiprova più tardi.'
-      );
+      await sendOnlineNotAvailableMessage(chatId);
     }
   }
 }
@@ -421,7 +427,7 @@ bot.onText(/\/help/, (msg) => {
     '/sito - Apri il sito Motoevasioni\n' +
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
-    '/rivista — Apri la Rivista Motoevasioni\n' +
+    '/rivista - Apri la Rivista Motoevasioni\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
@@ -449,11 +455,11 @@ bot.onText(/\/sito/, (msg) => {
   );
 });
 
-bot.onText(/\/foto$/, (msg) => {
+bot.onText(/^\/foto$/, (msg) => {
   sendGridPassPromo(msg.chat.id);
 });
 
-bot.onText(/\/foto_online$/, async (msg) => {
+bot.onText(/^\/foto_online$/, async (msg) => {
   await sendActiveOnlineContent(msg.chat.id);
 });
 
@@ -462,7 +468,7 @@ bot.onText(/\/foto_online$/, async (msg) => {
 
   Restano attivi come backup temporaneo.
 */
-bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
+bot.onText(/^\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
@@ -478,14 +484,14 @@ bot.onText(/\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
   );
 });
 
-bot.onText(/\/rivista/, (msg) => {
+bot.onText(/^\/rivista$/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
     'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/m-ss71-rivista-motoevasioni/'
   );
 });
 
-bot.onText(/\/attiva_online_two(?:\s+(\d+))?$/, (msg, match) => {
+bot.onText(/^\/attiva_online_two(?:\s+(\d+))?$/, (msg, match) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
@@ -501,7 +507,7 @@ bot.onText(/\/attiva_online_two(?:\s+(\d+))?$/, (msg, match) => {
   );
 });
 
-bot.onText(/\/disattiva_online$/, (msg) => {
+bot.onText(/^\/disattiva_online$/, (msg) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
@@ -514,7 +520,7 @@ bot.onText(/\/disattiva_online$/, (msg) => {
   );
 });
 
-bot.onText(/\/stato_online$/, async (msg) => {
+bot.onText(/^\/stato_online$/, async (msg) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
@@ -537,7 +543,7 @@ bot.onText(/\/stato_online$/, async (msg) => {
   );
 });
 
-bot.onText(/\/debug_foto_online$/, async (msg) => {
+bot.onText(/^\/debug_foto_online$/, async (msg) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
@@ -703,7 +709,7 @@ bot.on('message', async (msg) => {
   }
 });
 
-bot.onText(/\/id/, (msg) => {
+bot.onText(/^\/id$/, (msg) => {
   bot.sendMessage(msg.chat.id, 'Il tuo chat ID è: ' + msg.chat.id);
 });
 
