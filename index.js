@@ -110,6 +110,7 @@ function getMainMenuKeyboard() {
         [
           { text: '🌐 Sito', callback_data: 'menu_sito' },
           { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' }
+          { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
         ]
       ]
     }
@@ -623,7 +624,28 @@ bot.on('callback_query', async (query) => {
     );
     return;
   }
+if (data === 'menu_roadbook') {
+  bot.answerCallbackQuery(query.id);
 
+  bot.sendMessage(
+    chatId,
+    '🛣️ *RoadBook ⭐️ Motoevasioni*\n\nUn viaggio su strade secondarie che raccontano, tra sapori, soste e luoghi collegati con senso.',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: 'Apri il RoadBook', url: 'https://www.motoevasioni.it/avventura-del-gusto/' }
+          ],
+          [
+            { text: 'Vedi l’esperienza completa', url: 'https://www.viator.com/it-IT/tours/Arezzo/Tobacco-and-Venus-Tour/d22631-5556829P5' }
+          ]
+        ]
+      }
+    }
+  );
+  return;
+}
   bot.answerCallbackQuery(query.id);
 });
 
