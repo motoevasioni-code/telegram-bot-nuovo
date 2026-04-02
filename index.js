@@ -109,7 +109,7 @@ function getMainMenuKeyboard() {
         ],
         [
           { text: '🌐 Sito', callback_data: 'menu_sito' },
-          { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' }
+          { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
           { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
         ]
       ]
@@ -143,6 +143,32 @@ function sendGridPassPromo(chatId) {
             {
               text: 'ATTIVA ORA',
               url: 'https://www.motoevasioni.it/prodotto/gridpass-pass-stagionale-2025/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+function sendRoadBook(chatId) {
+  bot.sendMessage(
+    chatId,
+    '🛣️ *RoadBook ⭐️ Motoevasioni*\n\nUn viaggio su strade secondarie che raccontano, tra sapori, soste e luoghi collegati con senso.',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Apri il RoadBook',
+              url: 'https://www.motoevasioni.it/avventura-del-gusto/'
+            }
+          ],
+          [
+            {
+              text: 'Vedi l’esperienza completa',
+              url: 'https://www.viator.com/it-IT/tours/Arezzo/Tobacco-and-Venus-Tour/d22631-5556829P5'
             }
           ]
         ]
@@ -412,7 +438,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/rivista'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/rivista\n/roadbook\n/id'
   );
 
   sendMainMenu(chatId);
@@ -429,6 +455,7 @@ bot.onText(/\/help/, (msg) => {
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
+    '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
@@ -464,6 +491,17 @@ bot.onText(/^\/foto_online$/, async (msg) => {
   await sendActiveOnlineContent(msg.chat.id);
 });
 
+bot.onText(/^\/rivista$/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/m-ss71-rivista-motoevasioni/'
+  );
+});
+
+bot.onText(/^\/roadbook$/, (msg) => {
+  sendRoadBook(msg.chat.id);
+});
+
 /*
   COMANDI ADMIN FOTO ONLINE LEGACY
 
@@ -482,13 +520,6 @@ bot.onText(/^\/attiva_online_one(?:\s+(\d+))?$/, (msg, match) => {
   bot.sendMessage(
     msg.chat.id,
     'online_one attivato come fallback legacy.\nScadenza: ' + formatDateTime(onlineState.expiresAt)
-  );
-});
-
-bot.onText(/^\/rivista$/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/m-ss71-rivista-motoevasioni/'
   );
 });
 
@@ -624,28 +655,13 @@ bot.on('callback_query', async (query) => {
     );
     return;
   }
-if (data === 'menu_roadbook') {
-  bot.answerCallbackQuery(query.id);
 
-  bot.sendMessage(
-    chatId,
-    '🛣️ *RoadBook ⭐️ Motoevasioni*\n\nUn viaggio su strade secondarie che raccontano, tra sapori, soste e luoghi collegati con senso.',
-    {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: 'Apri il RoadBook', url: 'https://www.motoevasioni.it/avventura-del-gusto/' }
-          ],
-          [
-            { text: 'Vedi l’esperienza completa', url: 'https://www.viator.com/it-IT/tours/Arezzo/Tobacco-and-Venus-Tour/d22631-5556829P5' }
-          ]
-        ]
-      }
-    }
-  );
-  return;
-}
+  if (data === 'menu_roadbook') {
+    bot.answerCallbackQuery(query.id);
+    sendRoadBook(chatId);
+    return;
+  }
+
   bot.answerCallbackQuery(query.id);
 });
 
