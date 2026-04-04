@@ -9,6 +9,9 @@ const WORDPRESS_BRIDGE_KEY = process.env.WORDPRESS_BRIDGE_KEY || '';
 const WORDPRESS_REPORT_URL =
   process.env.WORDPRESS_REPORT_URL ||
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/report';
+const WORDPRESS_PHOTO_DAY_URL =
+  process.env.WORDPRESS_PHOTO_DAY_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/photo-day';
 
 if (!BOT_TOKEN) {
   console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
@@ -106,6 +109,9 @@ function getMainMenuKeyboard() {
         [
           { text: '📸 Foto online', callback_data: 'menu_foto_online' },
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
+        ],
+        [
+          { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
         ],
         [
           { text: '🌐 Sito', callback_data: 'menu_sito' },
@@ -207,6 +213,16 @@ function getWordPressReportUrlWithKey() {
   return `${WORDPRESS_REPORT_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
 }
 
+function getWordPressPhotoDayUrlWithKey(dateValue = '') {
+  let url = `${WORDPRESS_PHOTO_DAY_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+
+  if (dateValue) {
+    url += `&date=${encodeURIComponent(dateValue)}`;
+  }
+
+  return url;
+}
+
 async function fetchWordPressActivePhoto() {
   if (!WORDPRESS_BRIDGE_KEY) {
     throw new Error('WORDPRESS_BRIDGE_KEY mancante');
@@ -217,6 +233,43 @@ async function fetchWordPressActivePhoto() {
 
   try {
     const response = await fetch(getWordPressBridgeUrlWithKey(), {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      throw new Error('Risposta JSON non valida');
+    }
+
+    if (!data.found || !data.item) {
+      return null;
+    }
+
+    return data.item;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchWordPressPhotoDay(dateValue = '') {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(getWordPressPhotoDayUrlWithKey(dateValue), {
       method: 'GET',
       signal: controller.signal,
       headers: {
@@ -389,6 +442,48 @@ async function sendActiveOnlineContent(chatId) {
   }
 }
 
+async function sendPhotoInfoMessage(chatId) {
+  try {
+    const dayItem = await fetchWordPressPhotoDay();
+
+    if (!dayItem) {
+      await bot.sendMessage(
+        chatId,
+        'In questo momento non è ancora impostato un passo per oggi.\n\nPer verificare quando le foto saranno disponibili usa il pulsante 📸 Foto online nel menu.\nQuando le foto saranno attive, lì troverai direttamente il link corretto.'
+      );
+      return;
+    }
+
+    let message =
+      '📷 *Richiesta info Foto*\n\n' +
+      'Le foto di oggi sono state scattate su:\n' +
+      `• *${dayItem.primary_location}*`;
+
+    if (dayItem.secondary_location) {
+      message += `\n• *${dayItem.secondary_location}*`;
+    }
+
+    if (dayItem.note_text) {
+      message += `\n\n_${dayItem.note_text}_`;
+    }
+
+    message +=
+      '\n\nPer sapere quando saranno online, usa il pulsante *📸 Foto online* nel menu.\n' +
+      'Quando le foto saranno disponibili, lì troverai direttamente il link corretto.';
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown'
+    });
+  } catch (error) {
+    console.error('Errore WordPress Bridge /photo-day:', error.message);
+
+    await bot.sendMessage(
+      chatId,
+      'Per sapere quando le foto saranno online, usa il pulsante 📸 Foto online nel menu.\nQuando le foto saranno disponibili, lì troverai direttamente il link corretto.'
+    );
+  }
+}
+
 async function getWordPressPhotoStatusText() {
   if (!WORDPRESS_BRIDGE_KEY) {
     return (
@@ -438,7 +533,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/rivista\n/roadbook\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/rivista\n/roadbook\n/id'
   );
 
   sendMainMenu(chatId);
@@ -454,6 +549,7 @@ bot.onText(/\/help/, (msg) => {
     '/sito - Apri il sito Motoevasioni\n' +
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
+    '/info_foto - Mostra il passo del giorno e come controllare le foto\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/id - Mostra il tuo chat ID'
@@ -489,6 +585,10 @@ bot.onText(/^\/foto$/, (msg) => {
 
 bot.onText(/^\/foto_online$/, async (msg) => {
   await sendActiveOnlineContent(msg.chat.id);
+});
+
+bot.onText(/^\/info_foto$/, async (msg) => {
+  await sendPhotoInfoMessage(msg.chat.id);
 });
 
 bot.onText(/^\/rivista$/, (msg) => {
@@ -588,6 +688,7 @@ bot.onText(/^\/debug_foto_online$/, async (msg) => {
   lines.push('WORDPRESS_BRIDGE_URL: ' + WORDPRESS_BRIDGE_URL);
   lines.push('WORDPRESS_BRIDGE_KEY: ' + (WORDPRESS_BRIDGE_KEY ? 'OK' : 'MANCANTE'));
   lines.push('WORDPRESS_REPORT_URL: ' + WORDPRESS_REPORT_URL);
+  lines.push('WORDPRESS_PHOTO_DAY_URL: ' + WORDPRESS_PHOTO_DAY_URL);
   lines.push('');
 
   const wpStatusText = await getWordPressPhotoStatusText();
@@ -620,6 +721,12 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_gridpass') {
     bot.answerCallbackQuery(query.id);
     sendGridPassPromo(chatId);
+    return;
+  }
+
+  if (data === 'menu_info_foto') {
+    bot.answerCallbackQuery(query.id);
+    await sendPhotoInfoMessage(chatId);
     return;
   }
 
