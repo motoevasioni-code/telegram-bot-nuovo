@@ -126,7 +126,7 @@ function getMainMenuKeyboard() {
 function sendMainMenu(chatId) {
   bot.sendMessage(
     chatId,
-    'Benvenuto nel self service Motoevasioni.\n\nScegli una voce dal menu:',
+    'Benvenuto nel self service Motoevasioni.\n\nScegli una voce dal menu:\n\nℹ️ Se non vedi subito le nuove voci o i nuovi pulsanti, chiudi e riapri la chat del bot oppure esci e rientra nel menu.',
     getMainMenuKeyboard()
   );
 }
