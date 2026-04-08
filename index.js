@@ -191,6 +191,14 @@ function normalizeText(value) {
   return String(value).trim();
 }
 
+function isValidDateString(value) {
+  if (!value) {
+    return false;
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value).trim());
+}
+
 function buildPhotoCaptionFromWordPress(item) {
   const parts = [];
 
@@ -209,6 +217,27 @@ function buildPhotoDayMessage(dayItem) {
   let message =
     '📷 *Richiesta info Foto*\n\n' +
     'Le foto di oggi sono state scattate su:\n' +
+    `• *${dayItem.primary_location}*`;
+
+  if (dayItem.secondary_location) {
+    message += `\n• *${dayItem.secondary_location}*`;
+  }
+
+  if (dayItem.note_text) {
+    message += `\n\n_${dayItem.note_text}_`;
+  }
+
+  message +=
+    '\n\nPer sapere quando le foto saranno online, usa il pulsante *📸 Foto online* nel menu.\n' +
+    'Quando le foto saranno disponibili, lì troverai direttamente il link corretto.';
+
+  return message;
+}
+
+function buildPhotoDayMessageForDate(dayItem, dateValue) {
+  let message =
+    `📷 *Richiesta info Foto*\n\n` +
+    `Per la data *${dateValue}* risulta:\n` +
     `• *${dayItem.primary_location}*`;
 
   if (dayItem.secondary_location) {
@@ -498,6 +527,49 @@ async function sendPhotoInfoMessage(chatId) {
   }
 }
 
+async function sendPhotoInfoMessageForDate(chatId, dateValue) {
+  try {
+    if (!isValidDateString(dateValue)) {
+      await bot.sendMessage(
+        chatId,
+        'Formato data non valido.\n\nUsa così:\n/info_foto_data 2026-04-12'
+      );
+      return;
+    }
+
+    const dayItem = await fetchWordPressPhotoDay(dateValue);
+
+    if (!dayItem) {
+      await bot.sendMessage(
+        chatId,
+        `Per la data ${dateValue} non risulta ancora impostato nessun passo.`
+      );
+      return;
+    }
+
+    const message = buildPhotoDayMessageForDate(dayItem, dateValue);
+
+    if (dayItem.image_url) {
+      await bot.sendPhoto(chatId, dayItem.image_url, {
+        caption: message,
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown'
+    });
+  } catch (error) {
+    console.error('Errore WordPress Bridge /photo-day con data:', error.message);
+
+    await bot.sendMessage(
+      chatId,
+      'Errore nel recupero della data richiesta.\nRiprova tra poco.'
+    );
+  }
+}
+
 async function getWordPressPhotoStatusText() {
   if (!WORDPRESS_BRIDGE_KEY) {
     return (
@@ -547,7 +619,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/rivista\n/roadbook\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/info_foto_data AAAA-MM-GG\n/rivista\n/roadbook\n/id'
   );
 
   sendMainMenu(chatId);
@@ -564,6 +636,7 @@ bot.onText(/\/help/, (msg) => {
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
     '/info_foto - Mostra il passo del giorno e come controllare le foto\n' +
+    '/info_foto_data AAAA-MM-GG - Mostra il passo impostato per una data specifica\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/id - Mostra il tuo chat ID'
@@ -603,6 +676,11 @@ bot.onText(/^\/foto_online$/, async (msg) => {
 
 bot.onText(/^\/info_foto$/, async (msg) => {
   await sendPhotoInfoMessage(msg.chat.id);
+});
+
+bot.onText(/^\/info_foto_data(?:\s+([0-9]{4}-[0-9]{2}-[0-9]{2}))?$/, async (msg, match) => {
+  const requestedDate = match && match[1] ? match[1].trim() : '';
+  await sendPhotoInfoMessageForDate(msg.chat.id, requestedDate);
 });
 
 bot.onText(/^\/rivista$/, (msg) => {
