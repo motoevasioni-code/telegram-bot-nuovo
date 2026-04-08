@@ -205,6 +205,27 @@ function buildPhotoCaptionFromWordPress(item) {
   return parts.join('\n\n').trim();
 }
 
+function buildPhotoDayMessage(dayItem) {
+  let message =
+    '📷 *Richiesta info Foto*\n\n' +
+    'Le foto di oggi sono state scattate su:\n' +
+    `• *${dayItem.primary_location}*`;
+
+  if (dayItem.secondary_location) {
+    message += `\n• *${dayItem.secondary_location}*`;
+  }
+
+  if (dayItem.note_text) {
+    message += `\n\n_${dayItem.note_text}_`;
+  }
+
+  message +=
+    '\n\nPer sapere quando le foto saranno online, usa il pulsante *📸 Foto online* nel menu.\n' +
+    'Quando le foto saranno disponibili, lì troverai direttamente il link corretto.';
+
+  return message;
+}
+
 function getWordPressBridgeUrlWithKey() {
   return `${WORDPRESS_BRIDGE_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
 }
@@ -454,22 +475,15 @@ async function sendPhotoInfoMessage(chatId) {
       return;
     }
 
-    let message =
-      '📷 *Richiesta info Foto*\n\n' +
-      'Le foto di oggi sono state scattate su:\n' +
-      `• *${dayItem.primary_location}*`;
+    const message = buildPhotoDayMessage(dayItem);
 
-    if (dayItem.secondary_location) {
-      message += `\n• *${dayItem.secondary_location}*`;
+    if (dayItem.image_url) {
+      await bot.sendPhoto(chatId, dayItem.image_url, {
+        caption: message,
+        parse_mode: 'Markdown'
+      });
+      return;
     }
-
-    if (dayItem.note_text) {
-      message += `\n\n_${dayItem.note_text}_`;
-    }
-
-    message +=
-      '\n\nPer sapere quando saranno online, usa il pulsante *📸 Foto online* nel menu.\n' +
-      'Quando le foto saranno disponibili, lì troverai direttamente il link corretto.';
 
     await bot.sendMessage(chatId, message, {
       parse_mode: 'Markdown'
@@ -862,3 +876,4 @@ bot.on('polling_error', (error) => {
   console.error('Polling error:', error.message);
 });
 
+console.log('Bot avviato.');
