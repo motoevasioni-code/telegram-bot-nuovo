@@ -199,6 +199,41 @@ function isValidDateString(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value).trim());
 }
 
+function formatDateToYmd(dateObj) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateString() {
+  return formatDateToYmd(new Date());
+}
+
+function getNextWeekdayDateString(targetWeekday) {
+  const today = new Date();
+  const currentWeekday = today.getDay();
+  let diff = targetWeekday - currentWeekday;
+
+  if (diff < 0) {
+    diff += 7;
+  }
+
+  const result = new Date(today);
+  result.setHours(0, 0, 0, 0);
+  result.setDate(today.getDate() + diff);
+
+  return formatDateToYmd(result);
+}
+
+function getNextSaturdayDateString() {
+  return getNextWeekdayDateString(6);
+}
+
+function getNextSundayDateString() {
+  return getNextWeekdayDateString(0);
+}
+
 function buildPhotoCaptionFromWordPress(item) {
   const parts = [];
 
@@ -570,6 +605,24 @@ async function sendPhotoInfoMessageForDate(chatId, dateValue) {
   }
 }
 
+function sendPhotoInfoChoiceMenu(chatId) {
+  return bot.sendMessage(
+    chatId,
+    '📷 Richiesta info Foto\n\nScegli il giorno che vuoi controllare:',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: 'Oggi', callback_data: 'info_foto_oggi' },
+            { text: 'Sabato', callback_data: 'info_foto_sabato' },
+            { text: 'Domenica', callback_data: 'info_foto_domenica' }
+          ]
+        ]
+      }
+    }
+  );
+}
+
 async function getWordPressPhotoStatusText() {
   if (!WORDPRESS_BRIDGE_KEY) {
     return (
@@ -818,7 +871,25 @@ bot.on('callback_query', async (query) => {
 
   if (data === 'menu_info_foto') {
     bot.answerCallbackQuery(query.id);
+    await sendPhotoInfoChoiceMenu(chatId);
+    return;
+  }
+
+  if (data === 'info_foto_oggi') {
+    bot.answerCallbackQuery(query.id);
     await sendPhotoInfoMessage(chatId);
+    return;
+  }
+
+  if (data === 'info_foto_sabato') {
+    bot.answerCallbackQuery(query.id);
+    await sendPhotoInfoMessageForDate(chatId, getNextSaturdayDateString());
+    return;
+  }
+
+  if (data === 'info_foto_domenica') {
+    bot.answerCallbackQuery(query.id);
+    await sendPhotoInfoMessageForDate(chatId, getNextSundayDateString());
     return;
   }
 
