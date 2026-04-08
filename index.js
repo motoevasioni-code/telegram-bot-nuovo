@@ -739,7 +739,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/info_foto_data AAAA-MM-GG\n/dove_siamo_weekend\n/rivista\n/roadbook\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/rivista\n/roadbook\n/id'
   );
 
   sendMainMenu(chatId);
@@ -756,7 +756,6 @@ bot.onText(/\/help/, (msg) => {
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
     '/info_foto - Mostra il passo del giorno e come controllare le foto\n' +
-    '/info_foto_data AAAA-MM-GG - Mostra il passo impostato per una data specifica\n' +
     '/dove_siamo_weekend - Mostra dove siamo nel prossimo weekend\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
@@ -799,6 +798,10 @@ bot.onText(/^\/info_foto$/, async (msg) => {
   await sendPhotoInfoMessage(msg.chat.id);
 });
 
+/*
+  Comando tecnico di backup/test.
+  Non è mostrato nei menu pubblici.
+*/
 bot.onText(/^\/info_foto_data(?:\s+([0-9]{4}-[0-9]{2}-[0-9]{2}))?$/, async (msg, match) => {
   const requestedDate = match && match[1] ? match[1].trim() : '';
   await sendPhotoInfoMessageForDate(msg.chat.id, requestedDate);
