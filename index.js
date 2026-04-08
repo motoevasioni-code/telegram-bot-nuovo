@@ -12,6 +12,9 @@ const WORDPRESS_REPORT_URL =
 const WORDPRESS_PHOTO_DAY_URL =
   process.env.WORDPRESS_PHOTO_DAY_URL ||
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/photo-day';
+const WORDPRESS_NEXT_WEEKEND_URL =
+  process.env.WORDPRESS_NEXT_WEEKEND_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/next-weekend-photo-days';
 
 if (!BOT_TOKEN) {
   console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
@@ -114,6 +117,9 @@ function getMainMenuKeyboard() {
           { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
         ],
         [
+          { text: '📍 Dove siamo nel prossimo weekend', callback_data: 'menu_next_weekend' }
+        ],
+        [
           { text: '🌐 Sito', callback_data: 'menu_sito' },
           { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
           { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
@@ -199,41 +205,6 @@ function isValidDateString(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value).trim());
 }
 
-function formatDateToYmd(dateObj) {
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getTodayDateString() {
-  return formatDateToYmd(new Date());
-}
-
-function getNextWeekdayDateString(targetWeekday) {
-  const today = new Date();
-  const currentWeekday = today.getDay();
-  let diff = targetWeekday - currentWeekday;
-
-  if (diff < 0) {
-    diff += 7;
-  }
-
-  const result = new Date(today);
-  result.setHours(0, 0, 0, 0);
-  result.setDate(today.getDate() + diff);
-
-  return formatDateToYmd(result);
-}
-
-function getNextSaturdayDateString() {
-  return getNextWeekdayDateString(6);
-}
-
-function getNextSundayDateString() {
-  return getNextWeekdayDateString(0);
-}
-
 function buildPhotoCaptionFromWordPress(item) {
   const parts = [];
 
@@ -290,6 +261,49 @@ function buildPhotoDayMessageForDate(dayItem, dateValue) {
   return message;
 }
 
+function buildWeekendSingleDayBlock(label, dateValue, item, found) {
+  if (!found || !item) {
+    return `*${label} • ${dateValue}*\nNessuna uscita ancora impostata.`;
+  }
+
+  let block = `*${label} • ${dateValue}*\n`;
+  block += `• *${item.primary_location}*`;
+
+  if (item.secondary_location) {
+    block += `\n• *${item.secondary_location}*`;
+  }
+
+  if (item.note_text) {
+    block += `\n_${item.note_text}_`;
+  }
+
+  return block;
+}
+
+function buildNextWeekendMessage(weekendData) {
+  const parts = [];
+
+  parts.push('📍 *Dove siamo nel prossimo weekend*');
+  parts.push(
+    buildWeekendSingleDayBlock(
+      'Sabato',
+      weekendData.saturday_date,
+      weekendData.saturday && weekendData.saturday.item ? weekendData.saturday.item : null,
+      weekendData.saturday && weekendData.saturday.found === true
+    )
+  );
+  parts.push(
+    buildWeekendSingleDayBlock(
+      'Domenica',
+      weekendData.sunday_date,
+      weekendData.sunday && weekendData.sunday.item ? weekendData.sunday.item : null,
+      weekendData.sunday && weekendData.sunday.found === true
+    )
+  );
+
+  return parts.join('\n\n');
+}
+
 function getWordPressBridgeUrlWithKey() {
   return `${WORDPRESS_BRIDGE_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
 }
@@ -306,6 +320,10 @@ function getWordPressPhotoDayUrlWithKey(dateValue = '') {
   }
 
   return url;
+}
+
+function getWordPressNextWeekendUrlWithKey() {
+  return `${WORDPRESS_NEXT_WEEKEND_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
 }
 
 async function fetchWordPressActivePhoto() {
@@ -377,6 +395,39 @@ async function fetchWordPressPhotoDay(dateValue = '') {
     }
 
     return data.item;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchWordPressNextWeekend() {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(getWordPressNextWeekendUrlWithKey(), {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      throw new Error('Risposta JSON non valida');
+    }
+
+    return data;
   } finally {
     clearTimeout(timeout);
   }
@@ -605,22 +656,38 @@ async function sendPhotoInfoMessageForDate(chatId, dateValue) {
   }
 }
 
-function sendPhotoInfoChoiceMenu(chatId) {
-  return bot.sendMessage(
-    chatId,
-    '📷 Richiesta info Foto\n\nScegli il giorno che vuoi controllare:',
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: 'Oggi', callback_data: 'info_foto_oggi' },
-            { text: 'Sabato', callback_data: 'info_foto_sabato' },
-            { text: 'Domenica', callback_data: 'info_foto_domenica' }
-          ]
-        ]
-      }
+async function sendNextWeekendMessage(chatId) {
+  try {
+    const weekendData = await fetchWordPressNextWeekend();
+    const message = buildNextWeekendMessage(weekendData);
+
+    const saturdayItem = weekendData.saturday && weekendData.saturday.item ? weekendData.saturday.item : null;
+    const sundayItem = weekendData.sunday && weekendData.sunday.item ? weekendData.sunday.item : null;
+
+    const imageUrl =
+      (saturdayItem && saturdayItem.image_url) ||
+      (sundayItem && sundayItem.image_url) ||
+      '';
+
+    if (imageUrl) {
+      await bot.sendPhoto(chatId, imageUrl, {
+        caption: message,
+        parse_mode: 'Markdown'
+      });
+      return;
     }
-  );
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown'
+    });
+  } catch (error) {
+    console.error('Errore WordPress Bridge /next-weekend-photo-days:', error.message);
+
+    await bot.sendMessage(
+      chatId,
+      'In questo momento non riesco a recuperare dove siamo nel prossimo weekend.\nRiprova tra poco.'
+    );
+  }
 }
 
 async function getWordPressPhotoStatusText() {
@@ -672,7 +739,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/info_foto_data AAAA-MM-GG\n/rivista\n/roadbook\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/info_foto_data AAAA-MM-GG\n/dove_siamo_weekend\n/rivista\n/roadbook\n/id'
   );
 
   sendMainMenu(chatId);
@@ -690,6 +757,7 @@ bot.onText(/\/help/, (msg) => {
     '/foto_online - Controlla se le foto online sono disponibili\n' +
     '/info_foto - Mostra il passo del giorno e come controllare le foto\n' +
     '/info_foto_data AAAA-MM-GG - Mostra il passo impostato per una data specifica\n' +
+    '/dove_siamo_weekend - Mostra dove siamo nel prossimo weekend\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/id - Mostra il tuo chat ID'
@@ -734,6 +802,10 @@ bot.onText(/^\/info_foto$/, async (msg) => {
 bot.onText(/^\/info_foto_data(?:\s+([0-9]{4}-[0-9]{2}-[0-9]{2}))?$/, async (msg, match) => {
   const requestedDate = match && match[1] ? match[1].trim() : '';
   await sendPhotoInfoMessageForDate(msg.chat.id, requestedDate);
+});
+
+bot.onText(/^\/dove_siamo_weekend$/, async (msg) => {
+  await sendNextWeekendMessage(msg.chat.id);
 });
 
 bot.onText(/^\/rivista$/, (msg) => {
@@ -834,6 +906,7 @@ bot.onText(/^\/debug_foto_online$/, async (msg) => {
   lines.push('WORDPRESS_BRIDGE_KEY: ' + (WORDPRESS_BRIDGE_KEY ? 'OK' : 'MANCANTE'));
   lines.push('WORDPRESS_REPORT_URL: ' + WORDPRESS_REPORT_URL);
   lines.push('WORDPRESS_PHOTO_DAY_URL: ' + WORDPRESS_PHOTO_DAY_URL);
+  lines.push('WORDPRESS_NEXT_WEEKEND_URL: ' + WORDPRESS_NEXT_WEEKEND_URL);
   lines.push('');
 
   const wpStatusText = await getWordPressPhotoStatusText();
@@ -871,25 +944,13 @@ bot.on('callback_query', async (query) => {
 
   if (data === 'menu_info_foto') {
     bot.answerCallbackQuery(query.id);
-    await sendPhotoInfoChoiceMenu(chatId);
-    return;
-  }
-
-  if (data === 'info_foto_oggi') {
-    bot.answerCallbackQuery(query.id);
     await sendPhotoInfoMessage(chatId);
     return;
   }
 
-  if (data === 'info_foto_sabato') {
+  if (data === 'menu_next_weekend') {
     bot.answerCallbackQuery(query.id);
-    await sendPhotoInfoMessageForDate(chatId, getNextSaturdayDateString());
-    return;
-  }
-
-  if (data === 'info_foto_domenica') {
-    bot.answerCallbackQuery(query.id);
-    await sendPhotoInfoMessageForDate(chatId, getNextSundayDateString());
+    await sendNextWeekendMessage(chatId);
     return;
   }
 
