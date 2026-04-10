@@ -770,7 +770,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/rivista\n/roadbook\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/rivista\n/roadbook\n/evasia\n/id'
   );
 
   sendMainMenu(chatId);
@@ -790,6 +790,7 @@ bot.onText(/\/help/, (msg) => {
     '/dove_siamo_weekend - Mostra dove siamo nel prossimo weekend\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
+    '/evasia - Apri EVASIA\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
@@ -852,9 +853,11 @@ bot.onText(/^\/rivista$/, (msg) => {
 bot.onText(/^\/roadbook$/, (msg) => {
   sendRoadBook(msg.chat.id);
 });
+
 bot.onText(/^\/evasia$/, (msg) => {
   sendEvasia(msg.chat.id);
 });
+
 /*
   COMANDI ADMIN FOTO ONLINE LEGACY
 
