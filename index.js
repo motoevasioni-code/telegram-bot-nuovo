@@ -852,7 +852,9 @@ bot.onText(/^\/rivista$/, (msg) => {
 bot.onText(/^\/roadbook$/, (msg) => {
   sendRoadBook(msg.chat.id);
 });
-
+bot.onText(/^\/evasia$/, (msg) => {
+  sendEvasia(msg.chat.id);
+});
 /*
   COMANDI ADMIN FOTO ONLINE LEGACY
 
