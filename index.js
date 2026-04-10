@@ -120,6 +120,9 @@ function getMainMenuKeyboard() {
           { text: '📍 Dove siamo nel prossimo weekend', callback_data: 'menu_next_weekend' }
         ],
         [
+          { text: '🌿 EVASIA', callback_data: 'menu_evasia' }
+        ],
+        [
           { text: '🌐 Sito', callback_data: 'menu_sito' },
           { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
           { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
@@ -181,6 +184,34 @@ function sendRoadBook(chatId) {
             {
               text: 'Vedi l’esperienza completa',
               url: 'https://www.viator.com/it-IT/tours/Arezzo/Tobacco-and-Venus-Tour/d22631-5556829P5'
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+function sendEvasia(chatId) {
+  bot.sendMessage(
+    chatId,
+    'EVASIA\n' +
+    'Keep Moving\n\n' +
+    'EVASIA è un progetto fatto di persone che amano la moto, il movimento e la libertà.\n' +
+    'Nasce per chi vuole continuare a vivere la strada nel modo giusto, mettendo in relazione motociclisti, famiglie, strutture e professionisti attorno a ciò che rende tutto questo possibile: stare bene.',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Scopri EVASIA',
+              url: 'https://www.motoevasioni.it/evasia-keep-moving/'
+            }
+          ],
+          [
+            {
+              text: 'Proponi la tua realtà',
+              url: 'https://www.motoevasioni.it/proponi-la-tua-realta-evasia/'
             }
           ]
         ]
@@ -954,6 +985,12 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_next_weekend') {
     bot.answerCallbackQuery(query.id);
     await sendNextWeekendMessage(chatId);
+    return;
+  }
+
+  if (data === 'menu_evasia') {
+    bot.answerCallbackQuery(query.id);
+    sendEvasia(chatId);
     return;
   }
 
