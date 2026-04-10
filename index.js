@@ -193,13 +193,15 @@ function sendRoadBook(chatId) {
 }
 
 function sendEvasia(chatId) {
-  bot.sendMessage(
+  bot.sendPhoto(
     chatId,
-    'EVASIA\n' +
-    'Keep Moving\n\n' +
-    'EVASIA è un progetto fatto di persone che amano la moto, il movimento e la libertà.\n' +
-    'Nasce per chi vuole continuare a vivere la strada nel modo giusto, mettendo in relazione motociclisti, famiglie, strutture e professionisti attorno a ciò che rende tutto questo possibile: stare bene.',
+    'https://www.motoevasioni.it/wp-content/uploads/2026/04/Logo-EVASIA-con-gradienti-dinamici.png',
     {
+      caption:
+        'EVASIA\n' +
+        'Keep Moving\n\n' +
+        'EVASIA è un progetto fatto di persone che amano la moto, il movimento e la libertà.\n' +
+        'Nasce per chi vuole continuare a vivere la strada nel modo giusto, mettendo in relazione motociclisti, famiglie, strutture e professionisti attorno a ciò che rende tutto questo possibile: stare bene.',
       reply_markup: {
         inline_keyboard: [
           [
