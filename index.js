@@ -120,6 +120,10 @@ function getMainMenuKeyboard() {
           { text: '📍 Dove siamo nel prossimo weekend', callback_data: 'menu_next_weekend' }
         ],
         [
+          { text: '🏍️ Ride Match', callback_data: 'menu_ride_match' },
+          { text: '🗺️ Moto Pass Map', callback_data: 'menu_moto_pass_map' }
+        ],
+        [
           { text: '🌿 EVASIA', callback_data: 'menu_evasia' }
         ],
         [
@@ -214,6 +218,55 @@ function sendEvasia(chatId) {
             {
               text: 'Proponi la tua realtà',
               url: 'https://www.motoevasioni.it/proponi-la-tua-realta-evasia/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+function sendRideMatch(chatId) {
+  bot.sendPhoto(
+    chatId,
+    'https://www.motoevasioni.it/wp-content/uploads/2026/04/GridMap®-Trova-un-Giro-in-Moto-Original.png',
+    {
+      caption:
+        '🏍️ Ride Match\n\n' +
+        'Siamo all’inizio della stagione, appena iniziata, e questa sezione nasce proprio adesso per mettere in contatto biker veri, con giri veri.\n\n' +
+        'Non troverai contenuti messi lì tanto per fare scena: deve partire con chi ha voglia di usarla davvero, pubblicare un giro, condividerlo anche con tracce GPX, provarla e aiutarci a farla crescere nel modo giusto.\n\n' +
+        'Da parte nostra c’è piena disponibilità a darti una mano all’inizio, per spiegarti come funziona e accompagnarti nei primi passi.\n\n' +
+        'La registrazione non è pensata per fare cassa, ma solo per mantenere questo spazio più sicuro, serio e affidabile per tutti.\n\n' +
+        'Se l’idea ti piace, entra, provala e parlane anche con altri biker.',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Apri Ride Match',
+              url: 'https://www.motoevasioni.it/trova-un-giro-in-moto/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+function sendMotoPassMap(chatId) {
+  bot.sendPhoto(
+    chatId,
+    'https://www.motoevasioni.it/wp-content/uploads/2026/03/Moto-Pass-Map-Motoevasioni.png',
+    {
+      caption:
+        '🗺️ Moto Pass Map\n\n' +
+        'Se ami i passi di montagna, questa mappa è un punto di partenza perfetto per trovare ispirazione, scoprire nuove strade e ritrovare grandi classici da vivere in moto.\n\n' +
+        'Aprila, esplorala e usala per immaginare il tuo prossimo giro.',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Apri Moto Pass Map',
+              url: 'https://www.motoevasioni.it/moto-pass-map/'
             }
           ]
         ]
@@ -772,7 +825,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/rivista\n/roadbook\n/evasia\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/id'
   );
 
   sendMainMenu(chatId);
@@ -790,6 +843,8 @@ bot.onText(/\/help/, (msg) => {
     '/foto_online - Controlla se le foto online sono disponibili\n' +
     '/info_foto - Mostra il passo del giorno e come controllare le foto\n' +
     '/dove_siamo_weekend - Mostra dove siamo nel prossimo weekend\n' +
+    '/ride_match - Apri Ride Match\n' +
+    '/moto_pass_map - Apri Moto Pass Map\n' +
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/evasia - Apri EVASIA\n' +
@@ -843,6 +898,14 @@ bot.onText(/^\/info_foto_data(?:\s+([0-9]{4}-[0-9]{2}-[0-9]{2}))?$/, async (msg,
 
 bot.onText(/^\/dove_siamo_weekend$/, async (msg) => {
   await sendNextWeekendMessage(msg.chat.id);
+});
+
+bot.onText(/^\/ride_match$/, (msg) => {
+  sendRideMatch(msg.chat.id);
+});
+
+bot.onText(/^\/moto_pass_map$/, (msg) => {
+  sendMotoPassMap(msg.chat.id);
 });
 
 bot.onText(/^\/rivista$/, (msg) => {
@@ -992,6 +1055,18 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_next_weekend') {
     bot.answerCallbackQuery(query.id);
     await sendNextWeekendMessage(chatId);
+    return;
+  }
+
+  if (data === 'menu_ride_match') {
+    bot.answerCallbackQuery(query.id);
+    sendRideMatch(chatId);
+    return;
+  }
+
+  if (data === 'menu_moto_pass_map') {
+    bot.answerCallbackQuery(query.id);
+    sendMotoPassMap(chatId);
     return;
   }
 
