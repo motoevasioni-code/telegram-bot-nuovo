@@ -2,9 +2,6 @@ const TelegramBot = require('node-telegram-bot-api');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const SITE_URL = process.env.SITE_URL || 'https://www.motoevasioni.it/';
-const MINI_APP_URL =
-  process.env.MINI_APP_URL ||
-  'https://www.motoevasioni.it/gridpass-mini-app/';
 const WORDPRESS_BRIDGE_URL =
   process.env.WORDPRESS_BRIDGE_URL ||
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/active-photo';
@@ -108,21 +105,31 @@ function clearOnlineContent() {
   onlineState.expiresAt = null;
 }
 
-function getMiniAppKeyboard() {
+function getMainMenuKeyboard() {
   return {
     reply_markup: {
       inline_keyboard: [
         [
-          {
-            text: 'Apri GridPass',
-            web_app: { url: MINI_APP_URL }
-          }
+          { text: '📸 Foto online', callback_data: 'menu_foto_online' },
+          { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
         ],
         [
-          {
-            text: 'Apri nel browser',
-            url: MINI_APP_URL
-          }
+          { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
+        ],
+        [
+          { text: '📍 Dove siamo nel prossimo weekend', callback_data: 'menu_next_weekend' }
+        ],
+        [
+          { text: '🏍️ Ride Match', callback_data: 'menu_ride_match' },
+          { text: '🗺️ Moto Pass Map', callback_data: 'menu_moto_pass_map' }
+        ],
+        [
+          { text: '🌿 EVASIA', callback_data: 'menu_evasia' }
+        ],
+        [
+          { text: '🌐 Sito', callback_data: 'menu_sito' },
+          { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
+          { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
         ]
       ]
     }
@@ -132,8 +139,8 @@ function getMiniAppKeyboard() {
 function sendMainMenu(chatId) {
   bot.sendMessage(
     chatId,
-    'Benvenuto nel self service Motoevasioni.\n\nDa ora il menu principale si apre tramite la Mini App.\n\nPremi qui sotto:',
-    getMiniAppKeyboard()
+    'Benvenuto nel self service Motoevasioni.\n\nScegli una voce dal menu:\n\nℹ️ Se non vedi subito le nuove voci o i nuovi pulsanti, chiudi e riapri la chat del bot oppure esci e rientra nel menu.',
+    getMainMenuKeyboard()
   );
 }
 
@@ -830,7 +837,7 @@ bot.onText(/\/help/, (msg) => {
     'Comandi disponibili:\n' +
     '/start - Avvia il bot\n' +
     '/help - Mostra questo aiuto\n' +
-    '/menu - Apri la Mini App\n' +
+    '/menu - Apri il menu self service\n' +
     '/sito - Apri il sito Motoevasioni\n' +
     '/foto - Vedi promo GridPass\n' +
     '/foto_online - Controlla se le foto online sono disponibili\n' +
@@ -999,7 +1006,6 @@ bot.onText(/^\/debug_foto_online$/, async (msg) => {
   lines.push('DEBUG FOTO ONLINE');
   lines.push('');
   lines.push('BOT_TOKEN: ' + (BOT_TOKEN ? 'OK' : 'MANCANTE'));
-  lines.push('MINI_APP_URL: ' + MINI_APP_URL);
   lines.push('WORDPRESS_BRIDGE_URL: ' + WORDPRESS_BRIDGE_URL);
   lines.push('WORDPRESS_BRIDGE_KEY: ' + (WORDPRESS_BRIDGE_KEY ? 'OK' : 'MANCANTE'));
   lines.push('WORDPRESS_REPORT_URL: ' + WORDPRESS_REPORT_URL);
