@@ -127,6 +127,9 @@ function getMainMenuKeyboard() {
           { text: '🌿 EVASIA', callback_data: 'menu_evasia' }
         ],
         [
+          [
+  { text: '🏍️ Scopri i tour', callback_data: 'menu_scopri_tour' }
+],
           { text: '🌐 Sito', callback_data: 'menu_sito' },
           { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
           { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
