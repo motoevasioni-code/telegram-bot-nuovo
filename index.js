@@ -291,19 +291,19 @@ function sendScopriTour(chatId) {
           [
             {
               text: 'Evasion Box | Scopri i tour',
-              url: 'https://www.motoevasioni.it/evasion-box-scopri-i-tour-motoevasioni/'
+              url: 'https://www.motoevasioni.it/evasion-box-tour-motoevasioni/'
             }
           ],
           [
             {
               text: 'Bacco, Tabacco & Venere',
-              url: 'https://www.motoevasioni.it/bacco-tabacco-venere/'
+              url: 'https://www.motoevasioni.it/bacco-tabacco-venere-tour-motoevasioni/'
             }
           ],
           [
             {
               text: 'Partner ufficiali',
-              url: 'https://www.motoevasioni.it/partner-ufficiali/'
+              url: 'https://www.motoevasioni.it/partner-ufficiali-evasion-box/'
             }
           ]
         ]
