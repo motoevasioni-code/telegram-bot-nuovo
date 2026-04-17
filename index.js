@@ -279,13 +279,20 @@ function sendMotoPassMap(chatId) {
 }
 
 function sendScopriTour(chatId) {
-  bot.sendMessage(
+  bot.sendPhoto(
     chatId,
-    '🏍️ *Scopri i tour Motoevasioni*\n\n' +
-    'Qui inizia il percorso dedicato ai tour Motoevasioni collegati a Evasion Box.\n\n' +
-    'Scopri il progetto, guarda un’esperienza già pronta e accedi alla pagina partner ufficiali.',
+    'https://www.motoevasioni.it/wp-content/uploads/2026/04/immagine-per-la-hero-del-bot.png',
     {
-      parse_mode: 'Markdown',
+      caption:
+        '🏍️ Scopri i tour Motoevasioni\n\n' +
+        'Non sono semplici giri.\n' +
+        'Sono esperienze pensate per chi sente che la strada non finisce dove finisce l’asfalto più comodo.\n\n' +
+        'Motoevasioni nasce per chi cerca anima, scoperta, intensità e il piacere di partire davvero.\n\n' +
+        'Qui trovi Evasion Box, il primo tour in evidenza Bacco, Tabacco & Venere e la rete dei Partner ufficiali da cui può iniziare il tuo percorso.\n\n' +
+        'Puoi iniziare in due modi:\n' +
+        '• visitando un partner ufficiale nella zona\n' +
+        '• oppure procedendo direttamente online\n\n' +
+        'Da lì il flusso continua nel sistema riservato Motoevasioni: welcome-nfc → spazio-nfc GridPass® → accesso all’esperienza privata.',
       reply_markup: {
         inline_keyboard: [
           [
