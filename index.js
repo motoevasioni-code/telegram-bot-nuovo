@@ -126,14 +126,14 @@ function getMainMenuKeyboard() {
         [
           { text: '🌿 EVASIA', callback_data: 'menu_evasia' }
         ],
-[
-  { text: '🏍️ Scopri i tour', callback_data: 'menu_scopri_tour' }
-],
-[
-  { text: '🌐 Sito', callback_data: 'menu_sito' },
-  { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
-  { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
-]
+        [
+          { text: '🏍️ Scopri i tour', callback_data: 'menu_scopri_tour' }
+        ],
+        [
+          { text: '🌐 Sito', callback_data: 'menu_sito' },
+          { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
+          { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
+        ]
       ]
     }
   };
@@ -270,6 +270,40 @@ function sendMotoPassMap(chatId) {
             {
               text: 'Apri Moto Pass Map',
               url: 'https://www.motoevasioni.it/moto-pass-map/'
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+function sendScopriTour(chatId) {
+  bot.sendMessage(
+    chatId,
+    '🏍️ *Scopri i tour Motoevasioni*\n\n' +
+    'Qui inizia il percorso dedicato ai tour Motoevasioni collegati a Evasion Box.\n\n' +
+    'Scopri il progetto, guarda un’esperienza già pronta e accedi alla pagina partner ufficiali.',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Evasion Box | Scopri i tour',
+              url: 'https://www.motoevasioni.it/evasion-box-scopri-i-tour-motoevasioni/'
+            }
+          ],
+          [
+            {
+              text: 'Bacco, Tabacco & Venere',
+              url: 'https://www.motoevasioni.it/bacco-tabacco-venere/'
+            }
+          ],
+          [
+            {
+              text: 'Partner ufficiali',
+              url: 'https://www.motoevasioni.it/partner-ufficiali/'
             }
           ]
         ]
@@ -828,7 +862,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/id'
   );
 
   sendMainMenu(chatId);
@@ -851,6 +885,7 @@ bot.onText(/\/help/, (msg) => {
     '/rivista - Apri la Rivista Motoevasioni\n' +
     '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/evasia - Apri EVASIA\n' +
+    '/scopri_tour - Apri Scopri i tour\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
@@ -924,6 +959,10 @@ bot.onText(/^\/roadbook$/, (msg) => {
 
 bot.onText(/^\/evasia$/, (msg) => {
   sendEvasia(msg.chat.id);
+});
+
+bot.onText(/^\/scopri_tour$/, (msg) => {
+  sendScopriTour(msg.chat.id);
 });
 
 /*
@@ -1076,6 +1115,12 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_evasia') {
     bot.answerCallbackQuery(query.id);
     sendEvasia(chatId);
+    return;
+  }
+
+  if (data === 'menu_scopri_tour') {
+    bot.answerCallbackQuery(query.id);
+    sendScopriTour(chatId);
     return;
   }
 
