@@ -286,13 +286,11 @@ function sendScopriTour(chatId) {
       caption:
         '🏍️ Scopri i tour Motoevasioni\n\n' +
         'Non sono semplici giri.\n' +
-        'Sono esperienze pensate per chi sente che la strada non finisce dove finisce l’asfalto più comodo.\n\n' +
-        'Motoevasioni nasce per chi cerca anima, scoperta, intensità e il piacere di partire davvero.\n\n' +
+        'Sono esperienze pensate per chi vuole vivere la strada con più anima, più scoperta e più intensità.\n\n' +
         'Qui trovi Evasion Box, il primo tour in evidenza Bacco, Tabacco & Venere e la rete dei Partner ufficiali da cui può iniziare il tuo percorso.\n\n' +
         'Puoi iniziare in due modi:\n' +
         '• visitando un partner ufficiale nella zona\n' +
-        '• oppure procedendo direttamente online\n\n' +
-        'Da lì il flusso continua nel sistema riservato Motoevasioni: welcome-nfc → spazio-nfc GridPass® → accesso all’esperienza privata.',
+        '• oppure procedendo direttamente online',
       reply_markup: {
         inline_keyboard: [
           [
@@ -318,7 +316,6 @@ function sendScopriTour(chatId) {
     }
   );
 }
-
 function normalizeText(value) {
   if (!value) {
     return '';
