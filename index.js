@@ -284,18 +284,26 @@ function sendScopriTour(chatId) {
     'https://www.motoevasioni.it/wp-content/uploads/2026/04/immagine-per-la-hero-del-bot.png',
     {
       caption:
-        '🏍️ Scopri i tour Motoevasioni\n\n' +
-        'Non sono semplici giri.\n' +
-        'Sono esperienze pensate per chi vuole vivere la strada con più anima, più scoperta e più intensità.\n\n' +
-        'Qui trovi Evasion Box, il primo tour in evidenza Bacco, Tabacco & Venere e la rete dei Partner ufficiali da cui può iniziare il tuo percorso.\n\n' +
-        'Puoi iniziare in due modi:\n' +
-        '• visitando un partner ufficiale nella zona\n' +
-        '• oppure procedendo direttamente online',
+        '🔥 Quello che hai dentro non si spegne. È benzina diabolica.\n\n' +
+        'Benvenuto in Motoevasioni.\n\n' +
+        'Smetti di girare a vuoto sui passi affollati.\n' +
+        'Qui trovi esperienze vere su strade secondarie, percorsi selezionati e strade che il viaggio normale non racconta più.\n\n' +
+        '🤫 Accesso riservato\n' +
+        'Non i soliti giri visti ovunque.\n' +
+        'Qui entri in un mondo parallelo fatto di curve giuste, luoghi veri e strade da meritare.\n\n' +
+        '🏍️ Scegli da dove iniziare:\n\n' +
+        '• EVASION BOX\n' +
+        'Il punto di partenza della tua prima vera evasione.\n\n' +
+        '• BACCO, TABACCO & VENERE\n' +
+        'Il primo tour firmato Motoevasioni: curve, gusto e scoperta.\n\n' +
+        '• PARTNER UFFICIALI\n' +
+        'La rete complice sul territorio.\n\n' +
+        '🔥 La strada ti aspetta. Come vuoi iniziare?',
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: 'Evasion Box | Scopri i tour',
+              text: 'Evasion Box',
               url: 'https://www.motoevasioni.it/evasion-box-tour-motoevasioni/'
             }
           ],
