@@ -310,7 +310,7 @@ function sendScopriTour(chatId) {
           [
             {
               text: 'Bacco, Tabacco & Venere',
-              url: 'https://www.motoevasioni.it/bacco-tabacco-venere-tour-motoevasioni/'
+              url: 'https://www.motoevasioni.it/bacco-tabacco-venere/'
             }
           ],
           [
