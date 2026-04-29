@@ -324,6 +324,33 @@ function sendScopriTour(chatId) {
     }
   );
 }
+
+function sendRivista(chatId) {
+  bot.sendMessage(
+    chatId,
+    '📖 *M-SS71 • Numero 2 • Aprile 2026*\n\nLeggi ora la nuova rivista Motoevasioni oppure scarica il PDF.',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Sfoglia la rivista',
+              url: 'https://online.fliphtml5.com/cpmpb/M-SS71_APRILE_2026/'
+            }
+          ],
+          [
+            {
+              text: 'Scarica il PDF',
+              url: 'https://www.motoevasioni.it/wp-content/uploads/2026/04/M-SS71_APRILE_2026.pdf'
+            }
+          ]
+        ]
+      }
+    }
+  );
+}
+
 function normalizeText(value) {
   if (!value) {
     return '';
@@ -959,10 +986,7 @@ bot.onText(/^\/moto_pass_map$/, (msg) => {
 });
 
 bot.onText(/^\/rivista$/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    'Leggi la Rivista Motoevasioni qui:\nhttps://www.motoevasioni.it/m-ss71-rivista-motoevasioni/'
-  );
+  sendRivista(msg.chat.id);
 });
 
 bot.onText(/^\/roadbook$/, (msg) => {
