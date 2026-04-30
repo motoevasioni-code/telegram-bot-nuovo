@@ -348,7 +348,7 @@ function sendRivista(chatId) {
           [
             {
               text: 'Scarica il PDF',
-              url: 'https://www.motoevasioni.it/wp-content/uploads/2026/04/M-SS71_APRILE_2026.pdf'
+              url: 'https://www.motoevasioni.it/wp-content/uploads/2026/04/RIVISTA_N.2_M-SS71_APRILE_2026.pdf'
             }
           ]
         ]
