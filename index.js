@@ -127,6 +127,9 @@ function getMainMenuKeyboard() {
           { text: '🌿 EVASIA', callback_data: 'menu_evasia' }
         ],
         [
+          { text: '📖 Rivista', callback_data: 'menu_rivista' }
+        ],
+        [
           { text: '🏍️ Scopri i tour', callback_data: 'menu_scopri_tour' }
         ],
         [
@@ -326,10 +329,13 @@ function sendScopriTour(chatId) {
 }
 
 function sendRivista(chatId) {
-  bot.sendMessage(
+  bot.sendPhoto(
     chatId,
-    '📖 *M-SS71 • Numero 2 • Aprile 2026*\n\nLeggi ora la nuova rivista Motoevasioni oppure scarica il PDF.',
+    'https://www.motoevasioni.it/wp-content/uploads/2026/04/COPERTINA_RIVISTA_APRILE_MSS71.png',
     {
+      caption:
+        '📖 *M-SS71 • Numero 2 • Aprile 2026*\n\n' +
+        'Leggi ora la nuova rivista Motoevasioni oppure scarica il PDF.',
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
@@ -1157,6 +1163,12 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_scopri_tour') {
     bot.answerCallbackQuery(query.id);
     sendScopriTour(chatId);
+    return;
+  }
+
+  if (data === 'menu_rivista') {
+    bot.answerCallbackQuery(query.id);
+    sendRivista(chatId);
     return;
   }
 
