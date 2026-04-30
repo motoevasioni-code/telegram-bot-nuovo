@@ -336,7 +336,7 @@ function sendRivista(chatId) {
           [
             {
               text: 'Sfoglia la rivista',
-              url: 'https://online.fliphtml5.com/cpmpb/M-SS71_APRILE_2026/'
+              url: 'https://online.fliphtml5.com/cpmpb/uojm/#p=1'
             }
           ],
           [
