@@ -1077,8 +1077,9 @@ async function fetchWordPressActivePhoto() {
       method: 'GET',
       signal: controller.signal,
       headers: {
-        Accept: 'application/json'
-      }
+  Accept: 'application/json',
+  'X-MEVA-TG-KEY': WORDPRESS_BRIDGE_KEY
+}
     });
 
     if (!response.ok) {
