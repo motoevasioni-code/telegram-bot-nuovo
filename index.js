@@ -332,8 +332,6 @@ function subscriberMatchesAutoveloxPreference(subscriber, state) {
 
 async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeChatId) {
   const subscribers = getSubscribersList();
-  const preferences = loadAlertPreferences();
-  const hasAnyPreference = Object.keys(preferences).length > 0;
   let sent = 0;
   let failed = 0;
   let matched = 0;
@@ -346,9 +344,7 @@ async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeCh
       continue;
     }
 
-    const shouldSend = hasAnyPreference
-      ? subscriberMatchesAutoveloxPreference(subscriber, state)
-      : true;
+    const shouldSend = subscriberMatchesAutoveloxPreference(subscriber, state);
 
     if (!shouldSend) {
       continue;
@@ -372,7 +368,7 @@ async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeCh
     matched: matched,
     sent: sent,
     failed: failed,
-    filtered: hasAnyPreference
+    filtered: true
   };
 }
 
