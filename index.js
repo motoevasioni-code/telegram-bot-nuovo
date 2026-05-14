@@ -1397,27 +1397,36 @@ function getAutoveloxTypeLabel(data) {
 }
 
 function buildAutoveloxBroadcastMessage(state) {
+  const nowText = new Date().toLocaleTimeString('it-IT', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
   let message =
-    '⚠️ ATTENZIONE BIKER\n\n' +
-    'Segnalazione live su strada.\n\n' +
-    'Tipo: ' + state.autovelox_tipo + '\n' +
-    'Passo/zona: ' + state.autovelox_passo + '\n';
+    '🚨 SEGNALAZIONE LIVE 🚨\n\n' +
+    'Un biker della community ha segnalato:\n\n' +
+    '📍 Passo/Zona: ' + state.autovelox_passo + '\n' +
+    '⚠️ Tipo: ' + state.autovelox_tipo + '\n' +
+    '⏱️ Segnalato alle: ' + nowText + '\n';
 
   if (state.autovelox_note) {
-    message += 'Nota: ' + state.autovelox_note + '\n';
+    message += '📝 Nota: ' + state.autovelox_note + '\n';
   }
 
   if (state.autovelox_latitude && state.autovelox_longitude) {
     message +=
-      'Posizione: https://maps.google.com/?q=' +
+      '🗺️ Posizione: https://maps.google.com/?q=' +
       encodeURIComponent(state.autovelox_latitude + ',' + state.autovelox_longitude) + '\n';
   } else {
-    message += 'Posizione: non condivisa\n';
+    message += '🗺️ Posizione: non condivisa\n';
   }
 
   message +=
-    '\nValidità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.\n' +
-    'Usa queste informazioni solo per sicurezza e guida sempre nel rispetto dei limiti.';
+    '\nChiudi il gas, occhi aperti e guida con prudenza.\n\n' +
+    'Vuoi aggiornare la situazione o segnalare un altro controllo?\n' +
+    'Apri “🚨 Segnalazioni Autovelox e Pattuglie” nel Bot GridPass.\n\n' +
+    'Validità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.\n' +
+    'La community si protegge insieme. 👊';
 
   return message;
 }
