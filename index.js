@@ -357,7 +357,7 @@ function getMainMenuKeyboard(activeEvent) {
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
         ],
         [
-          { text: '⚠️ AUTOVELOX LIVE', callback_data: 'menu_autovelox_live' }
+          { text: '🚨 AUTOVELOX LIVE', callback_data: 'menu_autovelox_live' }
         ],
         [
           { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
@@ -1360,7 +1360,7 @@ function startAutoveloxFlow(chatId) {
 
   bot.sendMessage(
     chatId,
-    '⚠️ *Autovelox Live Motoevasioni*\n\nSegnala solo da fermo e solo se la segnalazione è reale.\n\nScegli il tipo di segnalazione:',
+    '🚨 *Autovelox Live Motoevasioni*\n\nSegnala solo da fermo e solo se la segnalazione è reale.\n\nScegli il tipo di segnalazione:',
     {
       parse_mode: 'Markdown',
       reply_markup: {
