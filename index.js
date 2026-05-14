@@ -1598,23 +1598,59 @@ async function sendNextWeekendMessage(chatId) {
   try {
     const weekendData = await fetchWordPressNextWeekend();
 
-    console.log('DEBUG NEXT WEEKEND:', JSON.stringify(weekendData));
-
     if (!weekendData || weekendData.success !== true) {
-      throw new Error('Weekend data non valida');
+      throw new Error('Risposta weekend non valida');
     }
 
-    const message = buildNextWeekendMessage(weekendData);
-
     const saturdayItem =
-      weekendData.saturday && weekendData.saturday.item
+      weekendData.saturday && weekendData.saturday.found === true && weekendData.saturday.item
         ? weekendData.saturday.item
         : null;
 
     const sundayItem =
-      weekendData.sunday && weekendData.sunday.item
+      weekendData.sunday && weekendData.sunday.found === true && weekendData.sunday.item
         ? weekendData.sunday.item
         : null;
+
+    const parts = [];
+
+    parts.push('📍 Dove siamo nel prossimo weekend');
+
+    if (saturdayItem) {
+      let saturdayBlock = 'Sabato • ' + (weekendData.saturday_date || 'data non impostata') + '\n';
+      saturdayBlock += '• ' + (saturdayItem.primary_location || 'Luogo non impostato');
+
+      if (saturdayItem.secondary_location) {
+        saturdayBlock += '\n• ' + saturdayItem.secondary_location;
+      }
+
+      if (saturdayItem.note_text) {
+        saturdayBlock += '\n\n' + saturdayItem.note_text;
+      }
+
+      parts.push(saturdayBlock);
+    }
+
+    if (sundayItem) {
+      let sundayBlock = 'Domenica • ' + (weekendData.sunday_date || 'data non impostata') + '\n';
+      sundayBlock += '• ' + (sundayItem.primary_location || 'Luogo non impostato');
+
+      if (sundayItem.secondary_location) {
+        sundayBlock += '\n• ' + sundayItem.secondary_location;
+      }
+
+      if (sundayItem.note_text) {
+        sundayBlock += '\n\n' + sundayItem.note_text;
+      }
+
+      parts.push(sundayBlock);
+    }
+
+    if (!saturdayItem && !sundayItem) {
+      parts.push('Nessuna uscita ancora impostata.');
+    }
+
+    const message = parts.join('\n\n').trim();
 
     const imageUrl =
       (saturdayItem && saturdayItem.image_url) ||
@@ -1624,8 +1660,7 @@ async function sendNextWeekendMessage(chatId) {
     if (imageUrl) {
       try {
         await bot.sendPhoto(chatId, imageUrl, {
-          caption: message,
-          parse_mode: 'Markdown'
+          caption: message
         });
         return;
       } catch (photoError) {
@@ -1633,10 +1668,7 @@ async function sendNextWeekendMessage(chatId) {
       }
     }
 
-    await bot.sendMessage(chatId, message, {
-      parse_mode: 'Markdown'
-    });
-
+    await bot.sendMessage(chatId, message);
   } catch (error) {
     console.error('Errore WordPress Bridge /next-weekend-photo-days:', error.message);
 
