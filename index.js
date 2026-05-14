@@ -1,4 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
+const path = require('path');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const SITE_URL = process.env.SITE_URL || 'https://www.motoevasioni.it/';
@@ -25,6 +27,117 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 const userState = {};
 const ADMIN_CHAT_ID = 1402209413;
+const SUBSCRIBERS_FILE = path.join(__dirname, 'telegram_subscribers.json');
+const AUTOVELOX_VALIDITY_MINUTES = 180;
+
+/*
+  ARCHIVIO ISCRITTI TELEGRAM
+  - salva gli utenti che avviano o usano il bot
+  - serve per inviare avvisi broadcast
+*/
+function loadSubscribers() {
+  try {
+    if (!fs.existsSync(SUBSCRIBERS_FILE)) {
+      return {};
+    }
+
+    const raw = fs.readFileSync(SUBSCRIBERS_FILE, 'utf8');
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('Errore lettura archivio iscritti:', error.message);
+    return {};
+  }
+}
+
+function saveSubscribers(subscribers) {
+  try {
+    fs.writeFileSync(SUBSCRIBERS_FILE, JSON.stringify(subscribers, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Errore salvataggio archivio iscritti:', error.message);
+  }
+}
+
+function registerSubscriber(msg) {
+  if (!msg || !msg.chat || !msg.from) {
+    return;
+  }
+
+  const chatId = String(msg.chat.id);
+  const subscribers = loadSubscribers();
+  const existing = subscribers[chatId] || {};
+
+  subscribers[chatId] = {
+    chat_id: chatId,
+    username: msg.from.username ? String(msg.from.username) : '',
+    first_name: msg.from.first_name ? String(msg.from.first_name) : '',
+    last_name: msg.from.last_name ? String(msg.from.last_name) : '',
+    is_bot: msg.from.is_bot === true,
+    first_seen_at: existing.first_seen_at ? existing.first_seen_at : new Date().toISOString(),
+    last_seen_at: new Date().toISOString(),
+    source: 'telegram_bot',
+    notifications_enabled: true
+  };
+
+  saveSubscribers(subscribers);
+}
+
+function getSubscribersList() {
+  const subscribers = loadSubscribers();
+  return Object.keys(subscribers)
+    .map(function (key) {
+      return subscribers[key];
+    })
+    .filter(function (item) {
+      return item && item.chat_id && item.notifications_enabled !== false;
+    });
+}
+
+async function broadcastToSubscribers(message, excludeChatId) {
+  const subscribers = getSubscribersList();
+  let sent = 0;
+  let failed = 0;
+
+  for (let i = 0; i < subscribers.length; i++) {
+    const subscriber = subscribers[i];
+    const targetChatId = subscriber.chat_id;
+
+    if (excludeChatId && String(targetChatId) === String(excludeChatId)) {
+      continue;
+    }
+
+    try {
+      await bot.sendMessage(targetChatId, message, {
+        disable_web_page_preview: true
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      console.error('Errore broadcast verso chat ' + targetChatId + ':', error.message);
+    }
+  }
+
+  return {
+    total: subscribers.length,
+    sent: sent,
+    failed: failed
+  };
+}
+
+function getSubscriberStatsText() {
+  const subscribers = getSubscribersList();
+  return 'Iscritti bot registrati: ' + subscribers.length;
+}
 
 /*
   STATO FOTO ONLINE LEGACY
@@ -112,6 +225,9 @@ function getMainMenuKeyboard() {
         [
           { text: '📸 Foto online', callback_data: 'menu_foto_online' },
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
+        ],
+        [
+          { text: '⚠️ AUTOVELOX LIVE', callback_data: 'menu_autovelox_live' }
         ],
         [
           { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
@@ -891,7 +1007,78 @@ async function getWordPressPhotoStatusText() {
   }
 }
 
+function startAutoveloxFlow(chatId) {
+  userState[chatId] = {
+    step: 'autovelox_tipo'
+  };
+
+  bot.sendMessage(
+    chatId,
+    '⚠️ *Autovelox Live Motoevasioni*\n\nSegnala solo da fermo e solo se la segnalazione è reale.\n\nScegli il tipo di segnalazione:',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '📸 Autovelox fisso', callback_data: 'av_tipo_fisso' }
+          ],
+          [
+            { text: '👮 Pattuglia / Telelaser', callback_data: 'av_tipo_pattuglia' }
+          ],
+          [
+            { text: '⚠️ Controllo generico', callback_data: 'av_tipo_controllo' }
+          ]
+        ]
+      }
+    }
+  );
+}
+
+function getAutoveloxTypeLabel(data) {
+  if (data === 'av_tipo_fisso') {
+    return 'Autovelox fisso';
+  }
+
+  if (data === 'av_tipo_pattuglia') {
+    return 'Pattuglia / Telelaser';
+  }
+
+  if (data === 'av_tipo_controllo') {
+    return 'Controllo generico';
+  }
+
+  return 'Segnalazione autovelox';
+}
+
+function buildAutoveloxBroadcastMessage(state) {
+  let message =
+    '⚠️ ATTENZIONE BIKER\n\n' +
+    'Segnalazione live su strada.\n\n' +
+    'Tipo: ' + state.autovelox_tipo + '\n' +
+    'Passo/zona: ' + state.autovelox_passo + '\n';
+
+  if (state.autovelox_note) {
+    message += 'Nota: ' + state.autovelox_note + '\n';
+  }
+
+  if (state.autovelox_latitude && state.autovelox_longitude) {
+    message +=
+      'Posizione: https://maps.google.com/?q=' +
+      encodeURIComponent(state.autovelox_latitude + ',' + state.autovelox_longitude) + '\n';
+  } else {
+    message += 'Posizione: non condivisa\n';
+  }
+
+  message +=
+    '\nValidità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.\n' +
+    'Usa queste informazioni solo per sicurezza e guida sempre nel rispetto dei limiti.';
+
+  return message;
+}
+
 bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
+  registerSubscriber(msg);
+
   const chatId = msg.chat.id;
   const startParam = match && match[1] ? match[1].trim() : '';
 
@@ -905,15 +1092,22 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
     return;
   }
 
+  if (startParam === 'autovelox_live') {
+    startAutoveloxFlow(chatId);
+    return;
+  }
+
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/autovelox\n/id'
   );
 
   sendMainMenu(chatId);
 });
 
 bot.onText(/\/help/, (msg) => {
+  registerSubscriber(msg);
+
   bot.sendMessage(
     msg.chat.id,
     'Comandi disponibili:\n' +
@@ -931,15 +1125,19 @@ bot.onText(/\/help/, (msg) => {
     '/roadbook - Apri RoadBook Motoevasioni\n' +
     '/evasia - Apri EVASIA\n' +
     '/scopri_tour - Apri Scopri i tour\n' +
+    '/autovelox - Segnala Autovelox Live\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
 
 bot.onText(/\/menu/, (msg) => {
+  registerSubscriber(msg);
   sendMainMenu(msg.chat.id);
 });
 
 bot.onText(/\/sito/, (msg) => {
+  registerSubscriber(msg);
+
   bot.sendMessage(
     msg.chat.id,
     'Apri il sito Motoevasioni:',
@@ -959,14 +1157,17 @@ bot.onText(/\/sito/, (msg) => {
 });
 
 bot.onText(/^\/foto$/, (msg) => {
+  registerSubscriber(msg);
   sendGridPassPromo(msg.chat.id);
 });
 
 bot.onText(/^\/foto_online$/, async (msg) => {
+  registerSubscriber(msg);
   await sendActiveOnlineContent(msg.chat.id);
 });
 
 bot.onText(/^\/info_foto$/, async (msg) => {
+  registerSubscriber(msg);
   await sendPhotoInfoMessage(msg.chat.id);
 });
 
@@ -975,36 +1176,57 @@ bot.onText(/^\/info_foto$/, async (msg) => {
   Non è mostrato nei menu pubblici.
 */
 bot.onText(/^\/info_foto_data(?:\s+([0-9]{4}-[0-9]{2}-[0-9]{2}))?$/, async (msg, match) => {
+  registerSubscriber(msg);
   const requestedDate = match && match[1] ? match[1].trim() : '';
   await sendPhotoInfoMessageForDate(msg.chat.id, requestedDate);
 });
 
 bot.onText(/^\/dove_siamo_weekend$/, async (msg) => {
+  registerSubscriber(msg);
   await sendNextWeekendMessage(msg.chat.id);
 });
 
 bot.onText(/^\/ride_match$/, (msg) => {
+  registerSubscriber(msg);
   sendRideMatch(msg.chat.id);
 });
 
 bot.onText(/^\/moto_pass_map$/, (msg) => {
+  registerSubscriber(msg);
   sendMotoPassMap(msg.chat.id);
 });
 
 bot.onText(/^\/rivista$/, (msg) => {
+  registerSubscriber(msg);
   sendRivista(msg.chat.id);
 });
 
 bot.onText(/^\/roadbook$/, (msg) => {
+  registerSubscriber(msg);
   sendRoadBook(msg.chat.id);
 });
 
 bot.onText(/^\/evasia$/, (msg) => {
+  registerSubscriber(msg);
   sendEvasia(msg.chat.id);
 });
 
 bot.onText(/^\/scopri_tour$/, (msg) => {
+  registerSubscriber(msg);
   sendScopriTour(msg.chat.id);
+});
+
+bot.onText(/^\/autovelox$/, (msg) => {
+  registerSubscriber(msg);
+  startAutoveloxFlow(msg.chat.id);
+});
+
+bot.onText(/^\/iscritti$/, (msg) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  bot.sendMessage(msg.chat.id, getSubscriberStatsText());
 });
 
 /*
@@ -1118,6 +1340,10 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
 
+  if (query.message) {
+    registerSubscriber(query.message);
+  }
+
   if (data === 'menu_foto_online') {
     bot.answerCallbackQuery(query.id);
     await sendActiveOnlineContent(chatId);
@@ -1127,6 +1353,27 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_gridpass') {
     bot.answerCallbackQuery(query.id);
     sendGridPassPromo(chatId);
+    return;
+  }
+
+  if (data === 'menu_autovelox_live') {
+    bot.answerCallbackQuery(query.id);
+    startAutoveloxFlow(chatId);
+    return;
+  }
+
+  if (data === 'av_tipo_fisso' || data === 'av_tipo_pattuglia' || data === 'av_tipo_controllo') {
+    bot.answerCallbackQuery(query.id);
+
+    userState[chatId] = {
+      step: 'autovelox_passo',
+      autovelox_tipo: getAutoveloxTypeLabel(data)
+    };
+
+    bot.sendMessage(
+      chatId,
+      'Scrivi il nome del passo o della zona.\n\nEsempio: Passo Viamaggio, Spino, Mandrioli, Bocca Serriola.'
+    );
     return;
   }
 
@@ -1215,10 +1462,24 @@ bot.on('callback_query', async (query) => {
 });
 
 bot.on('message', async (msg) => {
+  registerSubscriber(msg);
+
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  console.log('CHAT_ID:', chatId, 'TEXT:', text);
+  console.log('CHAT_ID:', chatId, 'TEXT:', text || '[no text]');
+
+  if (msg.location && userState[chatId] && userState[chatId].step === 'autovelox_posizione') {
+    userState[chatId].autovelox_latitude = msg.location.latitude;
+    userState[chatId].autovelox_longitude = msg.location.longitude;
+    userState[chatId].step = 'autovelox_note';
+
+    bot.sendMessage(
+      chatId,
+      'Posizione ricevuta.\n\nOra scrivi una nota breve, oppure scrivi NO.\n\nEsempio: dopo il tornante, lato destro.'
+    );
+    return;
+  }
 
   if (!text) {
     return;
@@ -1229,6 +1490,126 @@ bot.on('message', async (msg) => {
   }
 
   if (!userState[chatId]) {
+    return;
+  }
+
+  if (userState[chatId].step === 'autovelox_passo') {
+    userState[chatId].autovelox_passo = text;
+    userState[chatId].step = 'autovelox_posizione';
+
+    bot.sendMessage(
+      chatId,
+      'Ora invia la posizione precisa dal telefono.\n\nSu Telegram premi la graffetta 📎 oppure il pulsante + e scegli Posizione.\n\nSe non vuoi inviarla, scrivi NO.',
+      {
+        reply_markup: {
+          keyboard: [
+            [
+              {
+                text: '📍 Invia posizione',
+                request_location: true
+              }
+            ]
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      }
+    );
+    return;
+  }
+
+  if (userState[chatId].step === 'autovelox_posizione') {
+    if (String(text).trim().toLowerCase() === 'no') {
+      userState[chatId].step = 'autovelox_note';
+      bot.sendMessage(
+        chatId,
+        'Ok, senza posizione GPS.\n\nOra scrivi una nota breve, oppure scrivi NO.',
+        {
+          reply_markup: {
+            remove_keyboard: true
+          }
+        }
+      );
+      return;
+    }
+
+    bot.sendMessage(
+      chatId,
+      'Per la posizione usa il pulsante “📍 Invia posizione”, oppure scrivi NO.'
+    );
+    return;
+  }
+
+  if (userState[chatId].step === 'autovelox_note') {
+    if (String(text).trim().toLowerCase() === 'no') {
+      userState[chatId].autovelox_note = '';
+    } else {
+      userState[chatId].autovelox_note = String(text).trim();
+    }
+
+    const state = userState[chatId];
+    const broadcastMessage = buildAutoveloxBroadcastMessage(state);
+
+    const reportPayload = {
+      chat_id: chatId,
+      username: msg.from && msg.from.username ? String(msg.from.username) : '',
+      first_name: msg.from && msg.from.first_name ? String(msg.from.first_name) : '',
+      last_name: msg.from && msg.from.last_name ? String(msg.from.last_name) : '',
+      report_type: 'autovelox_live',
+      location_name: state.autovelox_passo ? String(state.autovelox_passo).trim() : '',
+      message_text: broadcastMessage,
+      latitude: state.autovelox_latitude ? String(state.autovelox_latitude) : '',
+      longitude: state.autovelox_longitude ? String(state.autovelox_longitude) : '',
+      status: 'live',
+      source: 'telegram',
+      valid_minutes: AUTOVELOX_VALIDITY_MINUTES
+    };
+
+    let wpSaveNote = 'Salvataggio WordPress: non eseguito.';
+
+    try {
+      const wpResult = await saveReportToWordPress(reportPayload);
+      wpSaveNote = 'Salvataggio WordPress: OK (ID ' + wpResult.report_id + ').';
+    } catch (error) {
+      console.error('Errore salvataggio autovelox su WordPress:', error.message);
+      wpSaveNote = 'Salvataggio WordPress: errore.';
+    }
+
+    let broadcastResult = {
+      total: 0,
+      sent: 0,
+      failed: 0
+    };
+
+    try {
+      broadcastResult = await broadcastToSubscribers(broadcastMessage, chatId);
+    } catch (error) {
+      console.error('Errore broadcast autovelox:', error.message);
+    }
+
+    bot.sendMessage(
+      ADMIN_CHAT_ID,
+      'Nuova segnalazione AUTOVELOX LIVE:\n\n' +
+      'Da chat ID: ' + chatId + '\n' +
+      'Tipo: ' + state.autovelox_tipo + '\n' +
+      'Passo/zona: ' + state.autovelox_passo + '\n' +
+      'Nota: ' + (state.autovelox_note || '(nessuna)') + '\n' +
+      'Broadcast inviati: ' + broadcastResult.sent + '\n' +
+      'Broadcast falliti: ' + broadcastResult.failed + '\n' +
+      wpSaveNote
+    );
+
+    delete userState[chatId];
+
+    bot.sendMessage(
+      chatId,
+      '✅ Segnalazione inviata.\n\nAvviso mandato agli iscritti del bot.\nValidità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.',
+      {
+        reply_markup: {
+          remove_keyboard: true
+        }
+      }
+    );
     return;
   }
 
@@ -1297,6 +1678,7 @@ bot.on('message', async (msg) => {
 });
 
 bot.onText(/^\/id$/, (msg) => {
+  registerSubscriber(msg);
   bot.sendMessage(msg.chat.id, 'Il tuo chat ID è: ' + msg.chat.id);
 });
 
