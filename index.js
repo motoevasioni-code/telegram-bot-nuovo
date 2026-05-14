@@ -357,7 +357,7 @@ function getMainMenuKeyboard(activeEvent) {
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
         ],
         [
-          { text: '🚨 AUTOVELOX LIVE', callback_data: 'menu_autovelox_live' }
+          { text: '🚨 SEGNALAZIONI AUTOVELOX e PATTUGLIE', callback_data: 'menu_autovelox_live' }
         ],
         [
           { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
