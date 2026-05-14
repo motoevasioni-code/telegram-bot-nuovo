@@ -1076,9 +1076,8 @@ async function fetchWordPressActivePhoto() {
     const response = await fetch(getWordPressBridgeUrlWithKey(), {
       method: 'GET',
       signal: controller.signal,
-      headers: {
-  Accept: 'application/json',
-  'X-MEVA-TG-KEY': WORDPRESS_BRIDGE_KEY
+     headers: {
+  Accept: 'application/json'
 }
     });
 
