@@ -17,6 +17,12 @@ const WORDPRESS_PHOTO_DAY_URL =
 const WORDPRESS_NEXT_WEEKEND_URL =
   process.env.WORDPRESS_NEXT_WEEKEND_URL ||
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/next-weekend-photo-days';
+const WORDPRESS_EVENTO_ATTIVO_URL =
+  process.env.WORDPRESS_EVENTO_ATTIVO_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/evento-attivo';
+const WORDPRESS_EVENTO_ALERT_URL =
+  process.env.WORDPRESS_EVENTO_ALERT_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/evento-alert';
 
 if (!BOT_TOKEN) {
   console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
@@ -28,6 +34,7 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const userState = {};
 const ADMIN_CHAT_ID = 1402209413;
 const SUBSCRIBERS_FILE = path.join(__dirname, 'telegram_subscribers.json');
+const EVENT_ALERTS_FILE = path.join(__dirname, 'telegram_event_alerts.json');
 const AUTOVELOX_VALIDITY_MINUTES = 180;
 
 /*
@@ -139,6 +146,114 @@ function getSubscriberStatsText() {
   return 'Iscritti bot registrati: ' + subscribers.length;
 }
 
+/*
+  PRE-ISCRIZIONI EVENTI / RADUNI
+  - salva chi chiede l'avviso per uno specifico evento
+  - backup locale, oltre al salvataggio sul bridge WordPress
+*/
+function loadEventAlerts() {
+  try {
+    if (!fs.existsSync(EVENT_ALERTS_FILE)) {
+      return {};
+    }
+
+    const raw = fs.readFileSync(EVENT_ALERTS_FILE, 'utf8');
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('Errore lettura pre-iscrizioni eventi:', error.message);
+    return {};
+  }
+}
+
+function saveEventAlerts(alerts) {
+  try {
+    fs.writeFileSync(EVENT_ALERTS_FILE, JSON.stringify(alerts, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Errore salvataggio pre-iscrizioni eventi:', error.message);
+  }
+}
+
+function getEventId(eventItem) {
+  if (!eventItem) {
+    return 'evento_attivo';
+  }
+
+  if (eventItem.id) {
+    return String(eventItem.id);
+  }
+
+  if (eventItem.event_id) {
+    return String(eventItem.event_id);
+  }
+
+  if (eventItem.slug) {
+    return String(eventItem.slug);
+  }
+
+  if (eventItem.button_text) {
+    return String(eventItem.button_text).trim();
+  }
+
+  if (eventItem.title) {
+    return String(eventItem.title).trim();
+  }
+
+  return 'evento_attivo';
+}
+
+function saveLocalEventAlert(eventItem, msg) {
+  if (!msg || !msg.chat || !msg.from) {
+    return;
+  }
+
+  const eventId = getEventId(eventItem);
+  const chatId = String(msg.chat.id);
+  const alerts = loadEventAlerts();
+
+  if (!alerts[eventId]) {
+    alerts[eventId] = {
+      event_id: eventId,
+      title: eventItem && eventItem.title ? String(eventItem.title) : '',
+      button_text: eventItem && eventItem.button_text ? String(eventItem.button_text) : '',
+      users: {}
+    };
+  }
+
+  alerts[eventId].users[chatId] = {
+    chat_id: chatId,
+    username: msg.from.username ? String(msg.from.username) : '',
+    first_name: msg.from.first_name ? String(msg.from.first_name) : '',
+    last_name: msg.from.last_name ? String(msg.from.last_name) : '',
+    saved_at: new Date().toISOString()
+  };
+
+  saveEventAlerts(alerts);
+}
+
+function getEventAlertUsers(eventItem) {
+  const eventId = getEventId(eventItem);
+  const alerts = loadEventAlerts();
+
+  if (!alerts[eventId] || !alerts[eventId].users) {
+    return [];
+  }
+
+  return Object.keys(alerts[eventId].users).map(function (key) {
+    return alerts[eventId].users[key];
+  });
+}
+
 function buildFotoOnlineNotificationMessage() {
   return (
     '📸 FOTO ONLINE MOTOEVASIONI\n\n' +
@@ -227,10 +342,16 @@ function clearOnlineContent() {
   onlineState.expiresAt = null;
 }
 
-function getMainMenuKeyboard() {
-  return {
-    reply_markup: {
-      inline_keyboard: [
+function getMainMenuKeyboard(activeEvent) {
+  const keyboard = [];
+
+  if (activeEvent && activeEvent.button_text) {
+    keyboard.push([
+      { text: String(activeEvent.button_text), callback_data: 'menu_evento_attivo' }
+    ]);
+  }
+
+  keyboard.push(
         [
           { text: '📸 Foto online', callback_data: 'menu_foto_online' },
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
@@ -262,16 +383,28 @@ function getMainMenuKeyboard() {
           { text: '⚠️ Segnalazioni', callback_data: 'menu_segnalazioni' },
           { text: '🛣️ RoadBook', callback_data: 'menu_roadbook' }
         ]
-      ]
+      );
+
+  return {
+    reply_markup: {
+      inline_keyboard: keyboard
     }
   };
 }
 
-function sendMainMenu(chatId) {
+async function sendMainMenu(chatId) {
+  let activeEvent = null;
+
+  try {
+    activeEvent = await fetchWordPressActiveEvent();
+  } catch (error) {
+    console.error('Errore recupero evento attivo per menu:', error.message);
+  }
+
   bot.sendMessage(
     chatId,
     'Benvenuto nel self service Motoevasioni.\n\nScegli una voce dal menu:\n\nℹ️ Se non vedi subito le nuove voci o i nuovi pulsanti, chiudi e riapri la chat del bot oppure esci e rientra nel menu.',
-    getMainMenuKeyboard()
+    getMainMenuKeyboard(activeEvent)
   );
 }
 
@@ -619,6 +752,14 @@ function getWordPressNextWeekendUrlWithKey() {
   return `${WORDPRESS_NEXT_WEEKEND_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
 }
 
+function getWordPressEventoAttivoUrlWithKey() {
+  return `${WORDPRESS_EVENTO_ATTIVO_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+}
+
+function getWordPressEventoAlertUrlWithKey() {
+  return `${WORDPRESS_EVENTO_ALERT_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+}
+
 async function fetchWordPressActivePhoto() {
   if (!WORDPRESS_BRIDGE_KEY) {
     throw new Error('WORDPRESS_BRIDGE_KEY mancante');
@@ -723,6 +864,202 @@ async function fetchWordPressNextWeekend() {
     return data;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+function normalizeActiveEvent(data) {
+  if (!data) {
+    return null;
+  }
+
+  let item = null;
+
+  if (data.item) {
+    item = data.item;
+  } else if (data.event) {
+    item = data.event;
+  } else if (data.found === true) {
+    item = data;
+  }
+
+  if (!item) {
+    return null;
+  }
+
+  const normalized = {
+    id: item.id || item.event_id || item.slug || '',
+    title: item.title || item.event_title || item.titolo || '',
+    button_text: item.button_text || item.button_label || item.testo_bottone || item.tasto || '',
+    image_url: item.image_url || item.poster_url || item.locandina_url || item.image || '',
+    message_text: item.message_text || item.message || item.messaggio || item.content || '',
+    date_1: item.date_1 || item.event_date_1 || item.data_evento_1 || '',
+    date_2: item.date_2 || item.event_date_2 || item.data_evento_2 || '',
+    active: item.active
+  };
+
+  if (!normalized.button_text && normalized.title) {
+    normalized.button_text = normalized.title;
+  }
+
+  return normalized;
+}
+
+function isActiveEventVisible(eventItem) {
+  if (!eventItem) {
+    return false;
+  }
+
+  if (eventItem.active === false || eventItem.active === 0 || eventItem.active === '0') {
+    return false;
+  }
+
+  if (!eventItem.button_text) {
+    return false;
+  }
+
+  if (!eventItem.date_2) {
+    return true;
+  }
+
+  const endDate = new Date(String(eventItem.date_2) + 'T23:59:59');
+
+  if (Number.isNaN(endDate.getTime())) {
+    return true;
+  }
+
+  return Date.now() <= endDate.getTime();
+}
+
+async function fetchWordPressActiveEvent() {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(getWordPressEventoAttivoUrlWithKey(), {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      return null;
+    }
+
+    const eventItem = normalizeActiveEvent(data);
+
+    if (!isActiveEventVisible(eventItem)) {
+      return null;
+    }
+
+    return eventItem;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function saveEventAlertToWordPress(eventItem, msg) {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const payload = {
+    event_id: getEventId(eventItem),
+    event_title: eventItem && eventItem.title ? String(eventItem.title) : '',
+    button_text: eventItem && eventItem.button_text ? String(eventItem.button_text) : '',
+    chat_id: msg && msg.chat && msg.chat.id ? String(msg.chat.id) : '',
+    username: msg && msg.from && msg.from.username ? String(msg.from.username) : '',
+    first_name: msg && msg.from && msg.from.first_name ? String(msg.from.first_name) : '',
+    last_name: msg && msg.from && msg.from.last_name ? String(msg.from.last_name) : '',
+    source: 'telegram'
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(getWordPressEventoAlertUrlWithKey(), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      throw new Error('Salvataggio pre-iscrizione evento non riuscito');
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendActiveEventMessage(chatId) {
+  try {
+    const eventItem = await fetchWordPressActiveEvent();
+
+    if (!eventItem) {
+      await bot.sendMessage(
+        chatId,
+        'In questo momento non ci sono eventi o raduni attivi nel bot.'
+      );
+      return;
+    }
+
+    const caption =
+      eventItem.message_text ||
+      'Evento Motoevasioni attivo. Attiva l’avviso per ricevere la notifica quando le foto saranno online.';
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: '🔔 AVVISAMI APPENA SONO ONLINE',
+            callback_data: 'evento_avvisami'
+          }
+        ]
+      ]
+    };
+
+    if (eventItem.image_url) {
+      await bot.sendPhoto(chatId, eventItem.image_url, {
+        caption: caption,
+        reply_markup: replyMarkup
+      });
+      return;
+    }
+
+    await bot.sendMessage(chatId, caption, {
+      reply_markup: replyMarkup
+    });
+  } catch (error) {
+    console.error('Errore invio evento attivo:', error.message);
+
+    await bot.sendMessage(
+      chatId,
+      'In questo momento non riesco a recuperare l’evento attivo. Riprova tra poco.'
+    );
   }
 }
 
@@ -1106,6 +1443,11 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
     return;
   }
 
+  if (startParam === 'evento_attivo') {
+    sendActiveEventMessage(chatId);
+    return;
+  }
+
   bot.sendMessage(
     chatId,
     'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/autovelox\n/notifica_foto_online\n/id'
@@ -1355,6 +1697,8 @@ bot.onText(/^\/debug_foto_online$/, async (msg) => {
   lines.push('WORDPRESS_REPORT_URL: ' + WORDPRESS_REPORT_URL);
   lines.push('WORDPRESS_PHOTO_DAY_URL: ' + WORDPRESS_PHOTO_DAY_URL);
   lines.push('WORDPRESS_NEXT_WEEKEND_URL: ' + WORDPRESS_NEXT_WEEKEND_URL);
+  lines.push('WORDPRESS_EVENTO_ATTIVO_URL: ' + WORDPRESS_EVENTO_ATTIVO_URL);
+  lines.push('WORDPRESS_EVENTO_ALERT_URL: ' + WORDPRESS_EVENTO_ALERT_URL);
   lines.push('');
 
   const wpStatusText = await getWordPressPhotoStatusText();
@@ -1380,6 +1724,50 @@ bot.on('callback_query', async (query) => {
 
   if (query.message) {
     registerSubscriber(query.message);
+  }
+
+  if (data === 'menu_evento_attivo') {
+    bot.answerCallbackQuery(query.id);
+    await sendActiveEventMessage(chatId);
+    return;
+  }
+
+  if (data === 'evento_avvisami') {
+    bot.answerCallbackQuery(query.id);
+
+    try {
+      const eventItem = await fetchWordPressActiveEvent();
+
+      if (!eventItem) {
+        await bot.sendMessage(
+          chatId,
+          'Evento non più attivo. Se le foto sono online, usa il pulsante 📸 Foto online.'
+        );
+        return;
+      }
+
+      saveLocalEventAlert(eventItem, query.message);
+
+      try {
+        await saveEventAlertToWordPress(eventItem, query.message);
+      } catch (error) {
+        console.error('Errore salvataggio pre-iscrizione evento su WordPress:', error.message);
+      }
+
+      await bot.sendMessage(
+        chatId,
+        '✅ Avviso attivato.\n\nTi manderò una notifica appena l’archivio foto di questo evento sarà online.'
+      );
+    } catch (error) {
+      console.error('Errore evento_avvisami:', error.message);
+
+      await bot.sendMessage(
+        chatId,
+        'Non riesco ad attivare l’avviso in questo momento. Riprova tra poco.'
+      );
+    }
+
+    return;
   }
 
   if (data === 'menu_foto_online') {
