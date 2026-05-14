@@ -139,6 +139,15 @@ function getSubscriberStatsText() {
   return 'Iscritti bot registrati: ' + subscribers.length;
 }
 
+function buildFotoOnlineNotificationMessage() {
+  return (
+    '📸 FOTO ONLINE MOTOEVASIONI\n\n' +
+    'Le nuove foto sono online.\n\n' +
+    'Apri il bot e premi “📸 Foto online” per trovare subito la tua foto.\n\n' +
+    'Se vuoi continuare a ricevere gli avvisi, mantieni avviata la chat con il bot.'
+  );
+}
+
 /*
   STATO FOTO ONLINE LEGACY
   - backup temporaneo
@@ -1099,7 +1108,7 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/autovelox\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/autovelox\n/notifica_foto_online\n/id'
   );
 
   sendMainMenu(chatId);
@@ -1126,6 +1135,7 @@ bot.onText(/\/help/, (msg) => {
     '/evasia - Apri EVASIA\n' +
     '/scopri_tour - Apri Scopri i tour\n' +
     '/autovelox - Segnala Autovelox Live\n' +
+    '/notifica_foto_online - Avvisa gli iscritti che le foto sono online\n' +
     '/id - Mostra il tuo chat ID'
   );
 });
@@ -1227,6 +1237,34 @@ bot.onText(/^\/iscritti$/, (msg) => {
   }
 
   bot.sendMessage(msg.chat.id, getSubscriberStatsText());
+});
+
+bot.onText(/^\/notifica_foto_online$/, async (msg) => {
+  if (!isAdmin(msg.chat.id)) {
+    return;
+  }
+
+  const notificationMessage = buildFotoOnlineNotificationMessage();
+
+  let broadcastResult = {
+    total: 0,
+    sent: 0,
+    failed: 0
+  };
+
+  try {
+    broadcastResult = await broadcastToSubscribers(notificationMessage, '');
+  } catch (error) {
+    console.error('Errore notifica foto online:', error.message);
+  }
+
+  bot.sendMessage(
+    msg.chat.id,
+    'Notifica foto online inviata.\n\n' +
+    'Iscritti totali: ' + broadcastResult.total + '\n' +
+    'Messaggi inviati: ' + broadcastResult.sent + '\n' +
+    'Messaggi falliti: ' + broadcastResult.failed
+  );
 });
 
 /*
