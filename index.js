@@ -332,6 +332,8 @@ function subscriberMatchesAutoveloxPreference(subscriber, state) {
 
 async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeChatId) {
   const subscribers = getSubscribersList();
+  const preferences = loadAlertPreferences();
+  const hasAnyPreference = Object.keys(preferences).length > 0;
   let sent = 0;
   let failed = 0;
   let matched = 0;
@@ -344,7 +346,9 @@ async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeCh
       continue;
     }
 
-    const shouldSend = subscriberMatchesAutoveloxPreference(subscriber, state);
+    const shouldSend = hasAnyPreference
+      ? subscriberMatchesAutoveloxPreference(subscriber, state)
+      : true;
 
     if (!shouldSend) {
       continue;
@@ -368,7 +372,7 @@ async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeCh
     matched: matched,
     sent: sent,
     failed: failed,
-    filtered: true
+    filtered: hasAnyPreference
   };
 }
 
@@ -1076,9 +1080,9 @@ async function fetchWordPressActivePhoto() {
     const response = await fetch(getWordPressBridgeUrlWithKey(), {
       method: 'GET',
       signal: controller.signal,
-     headers: {
-  Accept: 'application/json'
-}
+      headers: {
+        Accept: 'application/json'
+      }
     });
 
     if (!response.ok) {
@@ -1593,10 +1597,24 @@ async function sendPhotoInfoMessageForDate(chatId, dateValue) {
 async function sendNextWeekendMessage(chatId) {
   try {
     const weekendData = await fetchWordPressNextWeekend();
+
+    console.log('DEBUG NEXT WEEKEND:', JSON.stringify(weekendData));
+
+    if (!weekendData || weekendData.success !== true) {
+      throw new Error('Weekend data non valida');
+    }
+
     const message = buildNextWeekendMessage(weekendData);
 
-    const saturdayItem = weekendData.saturday && weekendData.saturday.item ? weekendData.saturday.item : null;
-    const sundayItem = weekendData.sunday && weekendData.sunday.item ? weekendData.sunday.item : null;
+    const saturdayItem =
+      weekendData.saturday && weekendData.saturday.item
+        ? weekendData.saturday.item
+        : null;
+
+    const sundayItem =
+      weekendData.sunday && weekendData.sunday.item
+        ? weekendData.sunday.item
+        : null;
 
     const imageUrl =
       (saturdayItem && saturdayItem.image_url) ||
@@ -1604,16 +1622,21 @@ async function sendNextWeekendMessage(chatId) {
       '';
 
     if (imageUrl) {
-      await bot.sendPhoto(chatId, imageUrl, {
-        caption: message,
-        parse_mode: 'Markdown'
-      });
-      return;
+      try {
+        await bot.sendPhoto(chatId, imageUrl, {
+          caption: message,
+          parse_mode: 'Markdown'
+        });
+        return;
+      } catch (photoError) {
+        console.error('Errore invio foto weekend:', photoError.message);
+      }
     }
 
     await bot.sendMessage(chatId, message, {
       parse_mode: 'Markdown'
     });
+
   } catch (error) {
     console.error('Errore WordPress Bridge /next-weekend-photo-days:', error.message);
 
