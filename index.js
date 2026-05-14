@@ -35,7 +35,86 @@ const userState = {};
 const ADMIN_CHAT_ID = 1402209413;
 const SUBSCRIBERS_FILE = path.join(__dirname, 'telegram_subscribers.json');
 const EVENT_ALERTS_FILE = path.join(__dirname, 'telegram_event_alerts.json');
+const ALERT_PREFERENCES_FILE = path.join(__dirname, 'telegram_alert_preferences.json');
 const AUTOVELOX_VALIDITY_MINUTES = 180;
+const MAX_ALERT_PASSES = 3;
+
+const ALERT_PASS_REGIONS = [
+  {
+    key: 'toscana',
+    label: 'Toscana',
+    passes: [
+      'Passo di Viamaggio',
+      'Passo dello Spino',
+      'Passo dei Mandrioli',
+      'Passo della Consuma',
+      'Passo del Muraglione',
+      'Passo della Futa',
+      'Passo della Raticosa'
+    ]
+  },
+  {
+    key: 'umbria',
+    label: 'Umbria',
+    passes: [
+      'Bocca Serriola',
+      'Bocca Trabaria',
+      'Forca di Cerro',
+      'Valico della Somma',
+      'Passo del Termine',
+      'Monte Cucco'
+    ]
+  },
+  {
+    key: 'marche',
+    label: 'Marche',
+    passes: [
+      'Bocca Serriola',
+      'Bocca Trabaria',
+      'Passo del Furlo',
+      'Passo del Cornello',
+      'Forca Canapine',
+      'Monte Nerone'
+    ]
+  },
+  {
+    key: 'emilia_romagna',
+    label: 'Emilia-Romagna',
+    passes: [
+      'Passo della Cisa',
+      'Passo del Cerreto',
+      'Passo dell’Abetone',
+      'Passo della Futa',
+      'Passo della Raticosa',
+      'Passo del Muraglione',
+      'Valtrebbia'
+    ]
+  },
+  {
+    key: 'lazio',
+    label: 'Lazio',
+    passes: [
+      'Passo della Futa di Roma',
+      'Forca d’Acero',
+      'Campo Staffi',
+      'Terminillo',
+      'Tolfa',
+      'Subiaco'
+    ]
+  },
+  {
+    key: 'liguria',
+    label: 'Liguria',
+    passes: [
+      'Valtrebbia',
+      'Passo del Bracco',
+      'Passo di Cento Croci',
+      'Passo del Tomarlo',
+      'Passo del Bocco',
+      'Passo della Scoffera'
+    ]
+  }
+];
 
 /*
   ARCHIVIO ISCRITTI TELEGRAM
@@ -144,6 +223,232 @@ async function broadcastToSubscribers(message, excludeChatId) {
 function getSubscriberStatsText() {
   const subscribers = getSubscribersList();
   return 'Iscritti bot registrati: ' + subscribers.length;
+}
+
+function loadAlertPreferences() {
+  try {
+    if (!fs.existsSync(ALERT_PREFERENCES_FILE)) {
+      return {};
+    }
+
+    const raw = fs.readFileSync(ALERT_PREFERENCES_FILE, 'utf8');
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('Errore lettura preferenze avvisi:', error.message);
+    return {};
+  }
+}
+
+function saveAlertPreferences(preferences) {
+  try {
+    fs.writeFileSync(ALERT_PREFERENCES_FILE, JSON.stringify(preferences, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Errore salvataggio preferenze avvisi:', error.message);
+  }
+}
+
+function normalizePassName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function findAlertRegion(regionKey) {
+  return ALERT_PASS_REGIONS.find(function (region) {
+    return region.key === regionKey;
+  }) || null;
+}
+
+function getPassByIndex(regionKey, passIndex) {
+  const region = findAlertRegion(regionKey);
+
+  if (!region || !region.passes[passIndex]) {
+    return '';
+  }
+
+  return region.passes[passIndex];
+}
+
+function saveUserAlertPreferences(chatId, regionKey, selectedPasses) {
+  const preferences = loadAlertPreferences();
+  const region = findAlertRegion(regionKey);
+
+  preferences[String(chatId)] = {
+    chat_id: String(chatId),
+    region_key: regionKey,
+    region_label: region ? region.label : regionKey,
+    passes: selectedPasses.slice(0, MAX_ALERT_PASSES),
+    updated_at: new Date().toISOString()
+  };
+
+  saveAlertPreferences(preferences);
+}
+
+function getUserAlertPreferences(chatId) {
+  const preferences = loadAlertPreferences();
+  return preferences[String(chatId)] || null;
+}
+
+function getAlertPreferencesStatsText() {
+  const preferences = loadAlertPreferences();
+  return 'Preferenze avvisi salvate: ' + Object.keys(preferences).length;
+}
+
+function subscriberMatchesAutoveloxPreference(subscriber, state) {
+  const preference = getUserAlertPreferences(subscriber.chat_id);
+
+  if (!preference || !Array.isArray(preference.passes) || preference.passes.length === 0) {
+    return false;
+  }
+
+  const reportedPass = normalizePassName(state && state.autovelox_passo ? state.autovelox_passo : '');
+
+  if (!reportedPass) {
+    return false;
+  }
+
+  return preference.passes.some(function (passName) {
+    const normalizedPreference = normalizePassName(passName);
+    return normalizedPreference && (
+      reportedPass.includes(normalizedPreference) ||
+      normalizedPreference.includes(reportedPass)
+    );
+  });
+}
+
+async function broadcastAutoveloxToRelevantSubscribers(message, state, excludeChatId) {
+  const subscribers = getSubscribersList();
+  const preferences = loadAlertPreferences();
+  const hasAnyPreference = Object.keys(preferences).length > 0;
+  let sent = 0;
+  let failed = 0;
+  let matched = 0;
+
+  for (let i = 0; i < subscribers.length; i++) {
+    const subscriber = subscribers[i];
+    const targetChatId = subscriber.chat_id;
+
+    if (excludeChatId && String(targetChatId) === String(excludeChatId)) {
+      continue;
+    }
+
+    const shouldSend = hasAnyPreference
+      ? subscriberMatchesAutoveloxPreference(subscriber, state)
+      : true;
+
+    if (!shouldSend) {
+      continue;
+    }
+
+    matched += 1;
+
+    try {
+      await bot.sendMessage(targetChatId, message, {
+        disable_web_page_preview: true
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      console.error('Errore broadcast autovelox verso chat ' + targetChatId + ':', error.message);
+    }
+  }
+
+  return {
+    total: subscribers.length,
+    matched: matched,
+    sent: sent,
+    failed: failed,
+    filtered: hasAnyPreference
+  };
+}
+
+function startAlertPreferencesFlow(chatId) {
+  userState[chatId] = {
+    step: 'alert_preferences_region'
+  };
+
+  const keyboard = ALERT_PASS_REGIONS.map(function (region) {
+    return [
+      {
+        text: region.label,
+        callback_data: 'pref_region_' + region.key
+      }
+    ];
+  });
+
+  const currentPreferences = getUserAlertPreferences(chatId);
+  let message =
+    '🔔 *Preferenze Avvisi*\n\n' +
+    'Scegli la regione e poi seleziona fino a ' + MAX_ALERT_PASSES + ' passi.\n' +
+    'Riceverai le segnalazioni solo per i passi scelti.';
+
+  if (currentPreferences && currentPreferences.passes && currentPreferences.passes.length > 0) {
+    message += '\n\nPreferenze attuali:\n' + currentPreferences.passes.map(function (passName) {
+      return '• ' + passName;
+    }).join('\n');
+  }
+
+  bot.sendMessage(chatId, message, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: keyboard
+    }
+  });
+}
+
+function sendPassSelectionKeyboard(chatId, regionKey) {
+  const region = findAlertRegion(regionKey);
+
+  if (!region) {
+    bot.sendMessage(chatId, 'Regione non trovata. Riapri il menu e riprova.');
+    return;
+  }
+
+  const state = userState[chatId] || {};
+  const selectedPasses = Array.isArray(state.selected_passes) ? state.selected_passes : [];
+
+  const keyboard = region.passes.map(function (passName, index) {
+    const selected = selectedPasses.includes(passName);
+    return [
+      {
+        text: (selected ? '✅ ' : '⬜ ') + passName,
+        callback_data: 'pref_pass_' + index
+      }
+    ];
+  });
+
+  keyboard.push([
+    { text: '💾 Salva preferenze', callback_data: 'pref_save' }
+  ]);
+
+  keyboard.push([
+    { text: '↩️ Cambia regione', callback_data: 'pref_back_regions' }
+  ]);
+
+  bot.sendMessage(
+    chatId,
+    'Regione: *' + region.label + '*\n\nSeleziona fino a ' + MAX_ALERT_PASSES + ' passi.\nSelezionati: ' + selectedPasses.length + '/' + MAX_ALERT_PASSES,
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }
+  );
 }
 
 /*
@@ -358,6 +663,9 @@ function getMainMenuKeyboard(activeEvent) {
         ],
         [
           { text: '🚨 SEGNALAZ. AUTOVELOX e PATTUGLIE', callback_data: 'menu_autovelox_live' }
+        ],
+        [
+          { text: '🔔 Preferenze Avvisi', callback_data: 'menu_alert_preferences' }
         ],
         [
           { text: '📷 Richiesta info Foto', callback_data: 'menu_info_foto' }
@@ -1457,9 +1765,14 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
     return;
   }
 
+  if (startParam === 'preferenze_avvisi') {
+    startAlertPreferencesFlow(chatId);
+    return;
+  }
+
   bot.sendMessage(
     chatId,
-    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/autovelox\n/notifica_foto_online\n/id'
+    'Ciao! Il bot Telegram Motoevasioni è online.\n\nComandi disponibili:\n/start\n/help\n/menu\n/sito\n/foto\n/foto_online\n/info_foto\n/dove_siamo_weekend\n/ride_match\n/moto_pass_map\n/rivista\n/roadbook\n/evasia\n/scopri_tour\n/autovelox\n/preferenze_avvisi\n/notifica_foto_online\n/id'
   );
 
   sendMainMenu(chatId);
@@ -1486,6 +1799,7 @@ bot.onText(/\/help/, (msg) => {
     '/evasia - Apri EVASIA\n' +
     '/scopri_tour - Apri Scopri i tour\n' +
     '/autovelox - Segnala Autovelox Live\n' +
+    '/preferenze_avvisi - Scegli fino a 3 passi per gli avvisi\n' +
     '/notifica_foto_online - Avvisa gli iscritti che le foto sono online\n' +
     '/id - Mostra il tuo chat ID'
   );
@@ -1582,12 +1896,17 @@ bot.onText(/^\/autovelox$/, (msg) => {
   startAutoveloxFlow(msg.chat.id);
 });
 
+bot.onText(/^\/preferenze_avvisi$/, (msg) => {
+  registerSubscriber(msg);
+  startAlertPreferencesFlow(msg.chat.id);
+});
+
 bot.onText(/^\/iscritti$/, (msg) => {
   if (!isAdmin(msg.chat.id)) {
     return;
   }
 
-  bot.sendMessage(msg.chat.id, getSubscriberStatsText());
+  bot.sendMessage(msg.chat.id, getSubscriberStatsText() + '\n' + getAlertPreferencesStatsText());
 });
 
 bot.onText(/^\/notifica_foto_online$/, async (msg) => {
@@ -1736,6 +2055,101 @@ bot.on('callback_query', async (query) => {
       chat: query.message.chat,
       from: query.from
     });
+  }
+
+  if (data === 'menu_alert_preferences') {
+    bot.answerCallbackQuery(query.id);
+    startAlertPreferencesFlow(chatId);
+    return;
+  }
+
+  if (data === 'pref_back_regions') {
+    bot.answerCallbackQuery(query.id);
+    startAlertPreferencesFlow(chatId);
+    return;
+  }
+
+  if (data && data.indexOf('pref_region_') === 0) {
+    bot.answerCallbackQuery(query.id);
+
+    const regionKey = data.replace('pref_region_', '');
+    const currentPreferences = getUserAlertPreferences(chatId);
+    const preloadPasses = currentPreferences && currentPreferences.region_key === regionKey && Array.isArray(currentPreferences.passes)
+      ? currentPreferences.passes.slice(0, MAX_ALERT_PASSES)
+      : [];
+
+    userState[chatId] = {
+      step: 'alert_preferences_passes',
+      region_key: regionKey,
+      selected_passes: preloadPasses
+    };
+
+    sendPassSelectionKeyboard(chatId, regionKey);
+    return;
+  }
+
+  if (data && data.indexOf('pref_pass_') === 0) {
+    bot.answerCallbackQuery(query.id);
+
+    if (!userState[chatId] || userState[chatId].step !== 'alert_preferences_passes') {
+      startAlertPreferencesFlow(chatId);
+      return;
+    }
+
+    const passIndex = parseInt(data.replace('pref_pass_', ''), 10);
+    const passName = getPassByIndex(userState[chatId].region_key, passIndex);
+
+    if (!passName) {
+      bot.sendMessage(chatId, 'Passo non trovato. Riapri le preferenze e riprova.');
+      return;
+    }
+
+    const selectedPasses = Array.isArray(userState[chatId].selected_passes) ? userState[chatId].selected_passes : [];
+    const alreadySelected = selectedPasses.includes(passName);
+
+    if (alreadySelected) {
+      userState[chatId].selected_passes = selectedPasses.filter(function (item) {
+        return item !== passName;
+      });
+    } else {
+      if (selectedPasses.length >= MAX_ALERT_PASSES) {
+        bot.sendMessage(chatId, 'Puoi scegliere massimo ' + MAX_ALERT_PASSES + ' passi. Togli un passo già selezionato prima di aggiungerne un altro.');
+        return;
+      }
+
+      selectedPasses.push(passName);
+      userState[chatId].selected_passes = selectedPasses;
+    }
+
+    sendPassSelectionKeyboard(chatId, userState[chatId].region_key);
+    return;
+  }
+
+  if (data === 'pref_save') {
+    bot.answerCallbackQuery(query.id);
+
+    if (!userState[chatId] || userState[chatId].step !== 'alert_preferences_passes') {
+      startAlertPreferencesFlow(chatId);
+      return;
+    }
+
+    const selectedPasses = Array.isArray(userState[chatId].selected_passes) ? userState[chatId].selected_passes : [];
+
+    if (selectedPasses.length === 0) {
+      bot.sendMessage(chatId, 'Seleziona almeno un passo prima di salvare.');
+      return;
+    }
+
+    saveUserAlertPreferences(chatId, userState[chatId].region_key, selectedPasses);
+    delete userState[chatId];
+
+    bot.sendMessage(
+      chatId,
+      '✅ Preferenze salvate.\n\nRiceverai avvisi solo per questi passi:\n' + selectedPasses.map(function (passName) {
+        return '• ' + passName;
+      }).join('\n')
+    );
+    return;
   }
 
   if (data === 'menu_evento_attivo') {
@@ -2025,7 +2439,7 @@ bot.on('message', async (msg) => {
     };
 
     try {
-      broadcastResult = await broadcastToSubscribers(broadcastMessage, chatId);
+      broadcastResult = await broadcastAutoveloxToRelevantSubscribers(broadcastMessage, state, chatId);
     } catch (error) {
       console.error('Errore broadcast autovelox:', error.message);
     }
@@ -2037,6 +2451,7 @@ bot.on('message', async (msg) => {
       'Tipo: ' + state.autovelox_tipo + '\n' +
       'Passo/zona: ' + state.autovelox_passo + '\n' +
       'Nota: ' + (state.autovelox_note || '(nessuna)') + '\n' +
+      'Iscritti pertinenti: ' + (broadcastResult.matched !== undefined ? broadcastResult.matched : broadcastResult.total) + '\n' +
       'Broadcast inviati: ' + broadcastResult.sent + '\n' +
       'Broadcast falliti: ' + broadcastResult.failed + '\n' +
       wpSaveNote
@@ -2046,7 +2461,7 @@ bot.on('message', async (msg) => {
 
     bot.sendMessage(
       chatId,
-      '✅ Segnalazione inviata.\n\nAvviso mandato agli iscritti del bot.\nValidità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.',
+      '✅ Segnalazione inviata.\n\nAvviso mandato agli iscritti interessati.\nValidità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.',
       {
         reply_markup: {
           remove_keyboard: true
