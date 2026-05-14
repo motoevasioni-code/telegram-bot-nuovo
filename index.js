@@ -19,10 +19,10 @@ const WORDPRESS_NEXT_WEEKEND_URL =
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/next-weekend-photo-days';
 const WORDPRESS_EVENTO_ATTIVO_URL =
   process.env.WORDPRESS_EVENTO_ATTIVO_URL ||
-  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/evento-attivo';
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/active-event';
 const WORDPRESS_EVENTO_ALERT_URL =
   process.env.WORDPRESS_EVENTO_ALERT_URL ||
-  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/evento-alert';
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/event-subscribe';
 
 if (!BOT_TOKEN) {
   console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
@@ -891,7 +891,7 @@ function normalizeActiveEvent(data) {
     title: item.title || item.event_title || item.titolo || '',
     button_text: item.button_text || item.button_label || item.testo_bottone || item.tasto || '',
     image_url: item.image_url || item.poster_url || item.locandina_url || item.image || '',
-    message_text: item.message_text || item.message || item.messaggio || item.content || '',
+    message_text: item.message_text || item.pre_message || item.message || item.messaggio || item.content || '',
     date_1: item.date_1 || item.event_date_1 || item.data_evento_1 || '',
     date_2: item.date_2 || item.event_date_2 || item.data_evento_2 || '',
     active: item.active
@@ -1360,7 +1360,7 @@ function startAutoveloxFlow(chatId) {
 
   bot.sendMessage(
     chatId,
-    '🚨 *Autovelox Live Motoevasioni*\n\nSegnala solo da fermo e solo se la segnalazione è reale.\n\nScegli il tipo di segnalazione:',
+    '⚠️ *Autovelox Live Motoevasioni*\n\nSegnala solo da fermo e solo se la segnalazione è reale.\n\nScegli il tipo di segnalazione:',
     {
       parse_mode: 'Markdown',
       reply_markup: {
@@ -1722,8 +1722,11 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
 
-  if (query.message) {
-    registerSubscriber(query.message);
+  if (query.message && query.from) {
+    registerSubscriber({
+      chat: query.message.chat,
+      from: query.from
+    });
   }
 
   if (data === 'menu_evento_attivo') {
@@ -1746,10 +1749,15 @@ bot.on('callback_query', async (query) => {
         return;
       }
 
-      saveLocalEventAlert(eventItem, query.message);
+      const eventAlertMessage = {
+        chat: query.message.chat,
+        from: query.from
+      };
+
+      saveLocalEventAlert(eventItem, eventAlertMessage);
 
       try {
-        await saveEventAlertToWordPress(eventItem, query.message);
+        await saveEventAlertToWordPress(eventItem, eventAlertMessage);
       } catch (error) {
         console.error('Errore salvataggio pre-iscrizione evento su WordPress:', error.message);
       }
