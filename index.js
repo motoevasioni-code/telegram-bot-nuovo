@@ -2512,7 +2512,13 @@ bot.on('message', async (msg) => {
 
     bot.sendMessage(
       chatId,
-      '✅ Segnalazione inviata.\n\nAvviso mandato agli iscritti interessati.\nValidità indicativa: ' + AUTOVELOX_VALIDITY_MINUTES + ' minuti.',
+     '✅ Segnalazione ricevuta e inviata ai biker interessati.\n\n' +
+'Grazie 👊\n' +
+'Con una semplice segnalazione hai aiutato altri motociclisti a viaggiare con più attenzione e sicurezza.\n\n' +
+'Più la community partecipa, più il sistema diventa utile per tutti.\n\n' +
+'Se credi nel progetto, condividi il Bot con altri biker:\n' +
+'👉 @gridpass_bot\n\n' +
+'La strada si protegge insieme.'
       {
         reply_markup: {
           remove_keyboard: true
