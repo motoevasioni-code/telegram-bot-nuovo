@@ -2518,7 +2518,7 @@ bot.on('message', async (msg) => {
 'Più la community partecipa, più il sistema diventa utile per tutti.\n\n' +
 'Se credi nel progetto, condividi il Bot con altri biker:\n' +
 '👉 @gridpass_bot\n\n' +
-'La strada si protegge insieme.'
+'La strada si protegge insieme.',
       {
         reply_markup: {
           remove_keyboard: true
