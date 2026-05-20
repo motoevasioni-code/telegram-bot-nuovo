@@ -91,6 +91,23 @@ const ALERT_PASS_REGIONS = [
     ]
   },
   {
+  key: 'lombardia',
+  label: 'Lombardia',
+  passes: [
+    'Passo dello Stelvio',
+    'Passo del Gavia',
+    'Passo del Mortirolo',
+    'Passo dell’Aprica',
+    'Passo del Penice',
+    'Passo San Marco',
+    'Passo del Vivione',
+    'Passo Crocedomini',
+    'Passo della Presolana',
+    'Passo del Maniva',
+    'Passo della Forcora'
+  ]
+},
+  {
     key: 'lazio',
     label: 'Lazio',
     passes: [
