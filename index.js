@@ -23,6 +23,9 @@ const WORDPRESS_EVENTO_ATTIVO_URL =
 const WORDPRESS_EVENTO_ALERT_URL =
   process.env.WORDPRESS_EVENTO_ALERT_URL ||
   'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/event-subscribe';
+const WORDPRESS_RIVISTA_URL =
+  process.env.WORDPRESS_RIVISTA_URL ||
+  'https://www.motoevasioni.it/wp-json/meva-tg-bridge/v1/active-rivista';
 
 if (!BOT_TOKEN) {
   console.error('Errore: BOT_TOKEN mancante nelle variabili ambiente.');
@@ -911,33 +914,111 @@ function sendScopriTour(chatId) {
   );
 }
 
-function sendRivista(chatId) {
-  bot.sendPhoto(
-    chatId,
-    './rivista-aprile-2026.png',
-    {
-      caption:
-        '📖 *M-SS71 • Numero 2 • Aprile 2026*\n\n' +
-        'Leggi ora la nuova rivista Motoevasioni oppure scarica il PDF.',
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: 'Sfoglia la rivista',
-              url: 'https://online.fliphtml5.com/cpmpb/uojm/#p=1'
-            }
-          ],
-          [
-            {
-              text: 'Scarica il PDF',
-              url: 'https://www.motoevasioni.it/wp-content/uploads/2026/04/RIVISTA_N.2_M-SS71_APRILE_2026.pdf'
-            }
-          ]
-        ]
+async function fetchWordPressRivista() {
+  if (!WORDPRESS_BRIDGE_KEY) {
+    throw new Error('WORDPRESS_BRIDGE_KEY mancante');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(getWordPressRivistaUrlWithKey(), {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
       }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
-  );
+
+    const data = await response.json();
+
+    if (!data || data.success !== true) {
+      throw new Error('Risposta JSON rivista non valida');
+    }
+
+    if (!data.found || !data.item) {
+      return null;
+    }
+
+    return data.item;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendRivista(chatId) {
+  try {
+    const item = await fetchWordPressRivista();
+
+    if (!item) {
+      await bot.sendMessage(
+        chatId,
+        'In questo momento non è impostata nessuna rivista attiva.'
+      );
+      return;
+    }
+
+    const title = item.title || item.titolo || 'M-SS71 • Rivista Motoevasioni';
+    const text = item.content || item.message_text || item.testo || 'Leggi ora la nuova rivista Motoevasioni.';
+    const imageUrl = item.image_url || item.cover_url || item.copertina_url || '';
+    const sfogliaUrl = item.flip_url || item.sfoglia_url || item.button_url || item.url_sfoglia || '';
+    const pdfUrl = item.pdf_url || item.download_url || item.url_pdf || '';
+
+    const keyboard = [];
+
+    if (sfogliaUrl) {
+      keyboard.push([
+        {
+          text: item.button_label || 'Sfoglia la rivista',
+          url: sfogliaUrl
+        }
+      ]);
+    }
+
+    if (pdfUrl) {
+      keyboard.push([
+        {
+          text: 'Scarica il PDF',
+          url: pdfUrl
+        }
+      ]);
+    }
+
+    const payload = {
+      caption:
+        '📖 *' + title + '*\n\n' +
+        text,
+      parse_mode: 'Markdown'
+    };
+
+    if (keyboard.length > 0) {
+      payload.reply_markup = {
+        inline_keyboard: keyboard
+      };
+    }
+
+    if (imageUrl) {
+      await bot.sendPhoto(chatId, imageUrl, payload);
+      return;
+    }
+
+    await bot.sendMessage(chatId, payload.caption, {
+      parse_mode: payload.parse_mode,
+      reply_markup: payload.reply_markup
+    });
+  } catch (error) {
+    console.error('Errore WordPress Bridge /rivista:', error.message);
+
+    await bot.sendMessage(
+      chatId,
+      'In questo momento non riesco a recuperare la rivista dal bridge. Riprova tra poco.'
+    );
+  }
 }
 
 function normalizeText(value) {
@@ -1083,6 +1164,10 @@ function getWordPressEventoAttivoUrlWithKey() {
 
 function getWordPressEventoAlertUrlWithKey() {
   return `${WORDPRESS_EVENTO_ALERT_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
+}
+
+function getWordPressRivistaUrlWithKey() {
+  return `${WORDPRESS_RIVISTA_URL}?key=${encodeURIComponent(WORDPRESS_BRIDGE_KEY)}`;
 }
 
 async function fetchWordPressActivePhoto() {
@@ -1939,9 +2024,9 @@ bot.onText(/^\/moto_pass_map$/, (msg) => {
   sendMotoPassMap(msg.chat.id);
 });
 
-bot.onText(/^\/rivista$/, (msg) => {
+bot.onText(/^\/rivista$/, async (msg) => {
   registerSubscriber(msg);
-  sendRivista(msg.chat.id);
+  await sendRivista(msg.chat.id);
 });
 
 bot.onText(/^\/roadbook$/, (msg) => {
@@ -2095,6 +2180,7 @@ bot.onText(/^\/debug_foto_online$/, async (msg) => {
   lines.push('WORDPRESS_NEXT_WEEKEND_URL: ' + WORDPRESS_NEXT_WEEKEND_URL);
   lines.push('WORDPRESS_EVENTO_ATTIVO_URL: ' + WORDPRESS_EVENTO_ATTIVO_URL);
   lines.push('WORDPRESS_EVENTO_ALERT_URL: ' + WORDPRESS_EVENTO_ALERT_URL);
+  lines.push('WORDPRESS_RIVISTA_URL: ' + WORDPRESS_RIVISTA_URL);
   lines.push('');
 
   const wpStatusText = await getWordPressPhotoStatusText();
@@ -2340,7 +2426,7 @@ bot.on('callback_query', async (query) => {
 
   if (data === 'menu_rivista') {
     bot.answerCallbackQuery(query.id);
-    sendRivista(chatId);
+    await sendRivista(chatId);
     return;
   }
 
