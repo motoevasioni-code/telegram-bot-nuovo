@@ -682,7 +682,7 @@ function getMainMenuKeyboard(activeEvent) {
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
         ],
         [
-          { text: '🚨 SEGNALAZ. AUTOVELOX e PATTUGLIE', callback_data: 'menu_autovelox_live' }
+          { text: '⚠️ SEGNALAZIONI LIVE PASSI & STRADE', callback_data: 'menu_autovelox_live' }
         ],
         [
           { text: '🔔 Preferenze Avvisi', callback_data: 'menu_alert_preferences' }
@@ -1827,13 +1827,13 @@ function startAutoveloxFlow(chatId) {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '📸 Autovelox fisso', callback_data: 'av_tipo_fisso' }
+            { text: '🚧 Ostacolo sulla strada', callback_data: 'av_tipo_fisso' }
           ],
           [
-            { text: '👮 Pattuglia / Telelaser', callback_data: 'av_tipo_pattuglia' }
+            { text: '🚑 Incidente', callback_data: 'av_tipo_pattuglia' }
           ],
           [
-            { text: '⚠️ Controllo generico', callback_data: 'av_tipo_controllo' }
+            { text: '🌧️ Meteo / fondo stradale', callback_data: 'av_tipo_controllo' }
           ]
         ]
       }
