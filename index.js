@@ -1821,7 +1821,11 @@ function startAutoveloxFlow(chatId) {
 
   bot.sendMessage(
     chatId,
-    '🚨 *Segnalazioni Autovelox e Pattuglie Motoevasioni*\n\nSegnala solo da fermo e solo se la segnalazione è reale.\n\nScegli il tipo di segnalazione:',
+    '⚠️ *Segnalazioni LIVE Passi & Strade*\n\n' +
+'Aiuta gli altri motociclisti condividendo situazioni utili alla sicurezza del percorso.\n\n' +
+'Segnala solo quando sei fermo e solo informazioni reali.\n\n' +
+'ℹ️ Le segnalazioni hanno finalità esclusivamente informative per la sicurezza della community. Ogni motociclista è tenuto al rispetto del Codice della Strada.\n\n' +
+'Che cosa vuoi segnalare?',
     {
       parse_mode: 'Markdown',
       reply_markup: {
