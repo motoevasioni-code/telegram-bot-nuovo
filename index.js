@@ -682,7 +682,7 @@ function getMainMenuKeyboard(activeEvent) {
           { text: '🏍️ GridPass', callback_data: 'menu_gridpass' }
         ],
         [
-          { text: '⚠️ SEGNALAZIONI LIVE PASSI & STRADE', callback_data: 'menu_autovelox_live' }
+          { text: '🚨 SEGNALAZIONI LIVE PASSI & STRADE', callback_data: 'menu_autovelox_live' }
         ],
         [
           { text: '🔔 Preferenze Avvisi', callback_data: 'menu_alert_preferences' }
