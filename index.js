@@ -1917,6 +1917,11 @@ bot.onText(/\/start(?:\s+(.+))?/, (msg, match) => {
     return;
   }
 
+  if (startParam === 'dove_siamo_weekend') {
+  sendNextWeekendMessage(chatId);
+  return;
+}
+
   if (startParam === 'evento_attivo') {
     sendActiveEventMessage(chatId);
     return;
